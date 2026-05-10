@@ -399,7 +399,7 @@ Pages.nuevaCotizacion = {
         document.getElementById('btn-cancelar-cot').addEventListener('click', () => this.resetForm());
     },
 
-    guardarCotizacion() {
+    guardarCotizacion(preventReset = false) {
         const s = this.state;
         const total = this.calcTotal();
         
@@ -438,7 +438,9 @@ Pages.nuevaCotizacion = {
         );
 
         App.showToast(`Cotización ${numero} guardada exitosamente`, 'success');
-        this.resetForm();
+        if (!preventReset) {
+            this.resetForm();
+        }
     },
 
     enviarWhatsApp() {
@@ -469,7 +471,7 @@ Pages.nuevaCotizacion = {
         window.open(url, '_blank');
         
         // Also save the quotation
-        this.guardarCotizacion();
+        this.guardarCotizacion(true);
     },
 
     convertirPedido() {
