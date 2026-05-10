@@ -172,6 +172,7 @@ Pages.configuracion = {
                 DB.setConfig('moneda_nombre', monedaVal[1]);
             }
             App.showToast('Configuración guardada','success');
+            this.refreshCatalogGrid(); // Actualizar la vista en tiempo real
         });
 
         // Reset DB
