@@ -46,7 +46,7 @@ Pages.pedidos = {
         <!-- Kanban Board -->
         <div class="kanban-board">
             <!-- En preparación -->
-            <div class="kanban-column kanban-col-prep">
+            <div class="kanban-column kanban-col-prep" ondragover="event.preventDefault()" ondrop="Pages.pedidos.drop(event, 'en_preparacion')">
                 <div class="kanban-column-header">
                     <h3>🔥 En preparación</h3>
                     <span class="kanban-count">${enPreparacion.length}</span>
@@ -56,7 +56,7 @@ Pages.pedidos = {
             </div>
 
             <!-- Listos -->
-            <div class="kanban-column kanban-col-ready">
+            <div class="kanban-column kanban-col-ready" ondragover="event.preventDefault()" ondrop="Pages.pedidos.drop(event, 'listo')">
                 <div class="kanban-column-header">
                     <h3>✅ Listo para entrega</h3>
                     <span class="kanban-count">${listos.length}</span>
@@ -66,7 +66,7 @@ Pages.pedidos = {
             </div>
 
             <!-- Entregados -->
-            <div class="kanban-column kanban-col-delivered">
+            <div class="kanban-column kanban-col-delivered" ondragover="event.preventDefault()" ondrop="Pages.pedidos.drop(event, 'entregado')">
                 <div class="kanban-column-header">
                     <h3>📦 Entregados</h3>
                     <span class="kanban-count">${entregados.length}</span>
@@ -120,7 +120,7 @@ Pages.pedidos = {
 
     renderKanbanCard(p) {
         return `
-        <div class="kanban-card" onclick="Pages.pedidos.verDetalle(${p.id})">
+        <div class="kanban-card" draggable="true" ondragstart="Pages.pedidos.dragStart(event, ${p.id})" onclick="Pages.pedidos.verDetalle(${p.id})">
             <h4>${p.numero} — ${p.cliente_nombre || 'Sin cliente'}</h4>
             <div class="order-info">
                 ${p.descripcion || 'Sin descripción'}<br>
@@ -135,6 +135,18 @@ Pages.pedidos = {
 
     init() {
         // Events are handled via onclick attributes
+    },
+
+    dragStart(event, id) {
+        event.dataTransfer.setData('pedido_id', id);
+    },
+
+    drop(event, nuevoEstado) {
+        event.preventDefault();
+        const id = event.dataTransfer.getData('pedido_id');
+        if (id) {
+            this.cambiarEstado(id, nuevoEstado);
+        }
     },
 
     verDetalle(id) {
@@ -152,6 +164,7 @@ Pages.pedidos = {
             ${p.notas ? `<p style="margin-top:.8rem;font-size:.85rem;"><strong>Notas:</strong> ${p.notas}</p>` : ''}
         `, `
             ${p.estado === 'en_preparacion' ? `<button class="btn btn-primary" onclick="Pages.pedidos.cambiarEstado(${p.id},'listo');App.closeModal();">Marcar como listo</button>` : ''}
+            ${p.estado === 'en_preparacion' ? `<button class="btn btn-danger" onclick="if(confirm('¿Estás seguro de cancelar este pedido?')){ Pages.pedidos.cambiarEstado(${p.id},'cancelado'); App.closeModal(); }">Cancelar pedido</button>` : ''}
             ${p.estado === 'listo' ? `<button class="btn btn-success" onclick="Pages.pedidos.cambiarEstado(${p.id},'entregado');App.closeModal();">Marcar entregado</button>` : ''}
             <button class="btn btn-outline" onclick="App.closeModal()">Cerrar</button>
         `);
@@ -159,6 +172,14 @@ Pages.pedidos = {
 
     cambiarEstado(id, estado) {
         DB.run("UPDATE pedidos SET estado = ? WHERE id = ?", [estado, id]);
+        
+        if (estado === 'entregado') {
+            const p = DB.getOne("SELECT cotizacion_id FROM pedidos WHERE id = ?", [id]);
+            if (p && p.cotizacion_id) {
+                DB.run("UPDATE cotizaciones SET estado = 'enviada' WHERE id = ?", [p.cotizacion_id]);
+            }
+        }
+        
         App.showToast(`Pedido actualizado: ${App.statusLabel(estado)}`, 'success');
         App.navigateTo('pedidos');
     },

@@ -9,7 +9,7 @@ window.DB = {
             locateFile: file => `https://cdnjs.cloudflare.com/ajax/libs/sql.js/1.10.3/${file}`
         });
         
-        const saved = localStorage.getItem('milenas_v2_db');
+        const saved = localStorage.getItem('milenas_v3_db');
         if (saved) {
             const buf = Uint8Array.from(atob(saved), c => c.charCodeAt(0));
             this.db = new SQL.Database(buf);
@@ -26,7 +26,7 @@ window.DB = {
         const data = this.db.export();
         const b64 = btoa(String.fromCharCode(...data));
         try {
-            localStorage.setItem('milenas_v2_db', b64);
+            localStorage.setItem('milenas_v3_db', b64);
         } catch(e) {
             console.warn('No se pudo guardar en localStorage:', e);
         }
@@ -63,6 +63,7 @@ window.DB = {
             CREATE TABLE IF NOT EXISTS clientes (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 nombre TEXT NOT NULL,
+                dni TEXT,
                 whatsapp TEXT,
                 email TEXT,
                 direccion TEXT,
@@ -146,18 +147,18 @@ window.DB = {
     seedData() {
         // === CLIENTES ===
         const clientes = [
-            ["María García López", "5551234001", "maria.garcia@email.com", "Zona 10, Ciudad de Guatemala", "Cliente frecuente, prefiere chocolate"],
-            ["Carlos Hernández", "5551234002", "carlos.h@email.com", "Zona 14, Ciudad de Guatemala", ""],
-            ["Ana Sofía López", "5551234003", "ana.lopez@email.com", "Mixco, Guatemala", "Alérgica a nueces"],
-            ["Roberto Martínez", "5551234004", "rob.martinez@email.com", "Zona 15, Ciudad de Guatemala", ""],
-            ["Valentina Castillo", "5551234005", "vale.castillo@email.com", "Antigua Guatemala", "Prefiere diseños temáticos"],
-            ["Diego Morales Pérez", "5551234006", "diego.m@email.com", "Zona 1, Ciudad de Guatemala", ""],
-            ["Luisa Fernanda Ramírez", "5551234007", "luisa.r@email.com", "Zona 7, Ciudad de Guatemala", "Corporativa - Empresa ABC"],
-            ["Fernando Pérez", "5551234008", "fernando.p@email.com", "Villa Nueva, Guatemala", ""]
+            ["María García López", "1234567-8", "5551234001", "maria.garcia@email.com", "Zona 10, Ciudad de Guatemala", "Cliente frecuente, prefiere chocolate"],
+            ["Carlos Hernández", "2345678-9", "5551234002", "carlos.h@email.com", "Zona 14, Ciudad de Guatemala", ""],
+            ["Ana Sofía López", "3456789-0", "5551234003", "ana.lopez@email.com", "Mixco, Guatemala", "Alérgica a nueces"],
+            ["Roberto Martínez", "4567890-1", "5551234004", "rob.martinez@email.com", "Zona 15, Ciudad de Guatemala", ""],
+            ["Valentina Castillo", "5678901-2", "5551234005", "vale.castillo@email.com", "Antigua Guatemala", "Prefiere diseños temáticos"],
+            ["Diego Morales Pérez", "6789012-3", "5551234006", "diego.m@email.com", "Zona 1, Ciudad de Guatemala", ""],
+            ["Luisa Fernanda Ramírez", "7890123-4", "5551234007", "luisa.r@email.com", "Zona 7, Ciudad de Guatemala", "Corporativa - Empresa ABC"],
+            ["Fernando Pérez", "8901234-5", "5551234008", "fernando.p@email.com", "Villa Nueva, Guatemala", ""]
         ];
         clientes.forEach(c => {
             this.db.run(
-                "INSERT INTO clientes (nombre, whatsapp, email, direccion, notas) VALUES (?,?,?,?,?)", c
+                "INSERT INTO clientes (nombre, dni, whatsapp, email, direccion, notas) VALUES (?,?,?,?,?,?)", c
             );
         });
 
@@ -308,7 +309,7 @@ window.DB = {
 
     // Reset database
     reset() {
-        localStorage.removeItem('milenas_v2_db');
+        localStorage.removeItem('milenas_v3_db');
         location.reload();
     }
 };

@@ -14,6 +14,7 @@ Pages.nuevaCotizacion = {
         extras: [],
         observaciones: '',
         clienteNombre: '',
+        clienteDni: '',
         clienteWhatsapp: ''
     },
 
@@ -128,54 +129,52 @@ Pages.nuevaCotizacion = {
     },
 
     renderSizeCards() {
-        const sizes = [
-            { size: 10, price: 120, icon: '🎂' },
-            { size: 15, price: 150, icon: '🎂' },
-            { size: 20, price: 180, icon: '🎂' },
-            { size: 30, price: 230, icon: '🎂' },
-            { size: 50, price: 320, icon: '🎂' }
-        ];
-        return sizes.map(s => `
-            <div class="size-card ${this.state.tamano === s.size ? 'selected' : ''}" 
-                 data-size="${s.size}" data-price="${s.price}">
-                <div class="size-cake" style="font-size:${1.5 + (s.size/50)*1.2}rem">${s.icon}</div>
-                <div class="size-portions">${s.size}</div>
+        const items = DB.getAll("SELECT * FROM catalogo WHERE categoria='tamano' AND activo=1 ORDER BY precio ASC");
+        if(items.length === 0) return '<p class="text-muted">No hay tamaños configurados.</p>';
+        
+        return items.map(s => {
+            const sizeNum = parseInt(s.nombre);
+            const isSelected = this.state.tamano === sizeNum;
+            // if first render and no state, maybe we should select the first one in init(), but let's just match
+            return `
+            <div class="size-card ${isSelected ? 'selected' : ''}" 
+                 data-size="${sizeNum}" data-price="${s.precio}">
+                <div class="size-cake" style="font-size:${1.5 + (sizeNum/50)*1.2}rem">${s.emoji || '🎂'}</div>
+                <div class="size-portions">${sizeNum}</div>
                 <div class="size-label">porciones</div>
-                <div class="size-price">Q.${s.price.toFixed(2)}</div>
+                <div class="size-price">Q.${s.precio.toFixed(2)}</div>
             </div>
-        `).join('');
+            `;
+        }).join('');
     },
 
     renderFlavorBtns() {
-        const flavors = [
-            { name: 'Vainilla', price: 0 },
-            { name: 'Chocolate', price: 0 },
-            { name: 'Marmoleado', price: 0 },
-            { name: 'Tres leches', price: 20 },
-            { name: 'Red Velvet', price: 20 }
-        ];
-        return flavors.map(f => `
-            <button class="flavor-btn ${this.state.sabor === f.name ? 'selected' : ''}"
-                    data-flavor="${f.name}" data-price="${f.price}">
-                ${f.name}
-                ${f.price > 0 ? `<span class="extra-price">+ Q.${f.price.toFixed(2)}</span>` : ''}
+        const items = DB.getAll("SELECT * FROM catalogo WHERE categoria='sabor' AND activo=1 ORDER BY precio ASC");
+        if(items.length === 0) return '<p class="text-muted">No hay sabores configurados.</p>';
+
+        return items.map(f => `
+            <button class="flavor-btn ${this.state.sabor === f.nombre ? 'selected' : ''}"
+                    data-flavor="${f.nombre}" data-price="${f.precio}">
+                ${f.nombre}
+                ${f.precio > 0 ? `<span class="extra-price">+ Q.${f.precio.toFixed(2)}</span>` : ''}
             </button>
         `).join('');
     },
 
     renderDesignCards() {
-        const designs = [
-            { name: 'Básico', price: 0, label: 'Incluido' },
-            { name: 'Personalizado', price: 30, label: '+ Q.30.00' },
-            { name: 'Temático', price: 50, label: '+ Q.50.00' }
-        ];
-        return designs.map(d => `
-            <div class="design-card ${this.state.diseno === d.name ? 'selected' : ''}"
-                 data-design="${d.name}" data-price="${d.price}">
-                <div class="design-name">${d.name}</div>
-                <div class="design-price">${d.label}</div>
+        const items = DB.getAll("SELECT * FROM catalogo WHERE categoria='diseno' AND activo=1 ORDER BY precio ASC");
+        if(items.length === 0) return '<p class="text-muted">No hay diseños configurados.</p>';
+
+        return items.map(d => {
+            const label = d.precio === 0 ? 'Incluido' : `+ Q.${d.precio.toFixed(2)}`;
+            return `
+            <div class="design-card ${this.state.diseno === d.nombre ? 'selected' : ''}"
+                 data-design="${d.nombre}" data-price="${d.precio}">
+                <div class="design-name">${d.nombre}</div>
+                <div class="design-price">${label}</div>
             </div>
-        `).join('');
+            `;
+        }).join('');
     },
 
     renderExtras(category) {
@@ -242,6 +241,10 @@ Pages.nuevaCotizacion = {
             <div class="summary-client">
                 <h4>Datos del cliente (opcional)</h4>
                 <div class="client-input-group">
+                    <span class="input-icon">🆔</span>
+                    <input type="text" id="cot-cliente-dni" placeholder="DNI / Identificación" value="${s.clienteDni}">
+                </div>
+                <div class="client-input-group">
                     <span class="input-icon">👤</span>
                     <input type="text" id="cot-cliente-nombre" placeholder="Nombre" value="${s.clienteNombre}">
                 </div>
@@ -249,6 +252,7 @@ Pages.nuevaCotizacion = {
                     <span class="input-icon">📱</span>
                     <input type="text" id="cot-cliente-whatsapp" placeholder="WhatsApp" value="${s.clienteWhatsapp}">
                 </div>
+                <p id="cot-cliente-found" style="font-size:.78rem; color:var(--success); display:none; margin-top:.3rem;"></p>
             </div>
         `;
     },
@@ -269,8 +273,29 @@ Pages.nuevaCotizacion = {
     },
 
     bindClientInputs() {
+        const dniInput = document.getElementById('cot-cliente-dni');
         const nameInput = document.getElementById('cot-cliente-nombre');
         const wpInput = document.getElementById('cot-cliente-whatsapp');
+        if (dniInput) {
+            dniInput.addEventListener('input', (e) => {
+                this.state.clienteDni = e.target.value;
+            });
+            dniInput.addEventListener('blur', () => {
+                const dni = this.state.clienteDni.trim();
+                if (!dni) return;
+                const found = DB.getOne("SELECT * FROM clientes WHERE dni = ?", [dni]);
+                const msg = document.getElementById('cot-cliente-found');
+                if (found) {
+                    this.state.clienteNombre = found.nombre;
+                    this.state.clienteWhatsapp = found.whatsapp || '';
+                    if (nameInput) nameInput.value = found.nombre;
+                    if (wpInput) wpInput.value = found.whatsapp || '';
+                    if (msg) { msg.textContent = `✅ Cliente encontrado: ${found.nombre}`; msg.style.display = 'block'; }
+                } else {
+                    if (msg) { msg.textContent = ''; msg.style.display = 'none'; }
+                }
+            });
+        }
         if (nameInput) {
             nameInput.addEventListener('input', (e) => { this.state.clienteNombre = e.target.value; });
         }
@@ -281,12 +306,20 @@ Pages.nuevaCotizacion = {
 
     init() {
         // Reset state
+        // Set initial state safely by fetching first items
+        const firstSize = DB.getOne("SELECT * FROM catalogo WHERE categoria='tamano' AND activo=1 ORDER BY precio ASC");
+        const firstFlavor = DB.getOne("SELECT * FROM catalogo WHERE categoria='sabor' AND activo=1 ORDER BY precio ASC");
+        const firstDesign = DB.getOne("SELECT * FROM catalogo WHERE categoria='diseno' AND activo=1 ORDER BY precio ASC");
+
         this.state = {
-            tamano: 10, precioTamano: 120,
-            sabor: 'Vainilla', precioSabor: 0,
-            diseno: 'Básico', precioDiseno: 0,
+            tamano: firstSize ? parseInt(firstSize.nombre) : 10,
+            precioTamano: firstSize ? firstSize.precio : 120,
+            sabor: firstFlavor ? firstFlavor.nombre : 'Vainilla',
+            precioSabor: firstFlavor ? firstFlavor.precio : 0,
+            diseno: firstDesign ? firstDesign.nombre : 'Básico',
+            precioDiseno: firstDesign ? firstDesign.precio : 0,
             extras: [], observaciones: '',
-            clienteNombre: '', clienteWhatsapp: ''
+            clienteNombre: '', clienteDni: '', clienteWhatsapp: ''
         };
 
         // Size cards
@@ -359,11 +392,23 @@ Pages.nuevaCotizacion = {
     guardarCotizacion() {
         const s = this.state;
         const total = this.calcTotal();
-        const numero = DB.nextNumber('COT');
+        
+        const count = DB.getOne("SELECT COUNT(*) as c FROM cotizaciones").c + 1;
+        const cNameSafe = (s.clienteNombre || 'anonimo').toLowerCase().replace(/[^a-z0-9]/g, '-').replace(/-+/g, '-').substring(0, 15);
+        const numero = `COT-${String(count).padStart(3, '0')}-${cNameSafe}`;
         
         // Find or create client
         let clienteId = null;
-        if (s.clienteNombre) {
+        if (s.clienteDni) {
+            const existing = DB.getOne("SELECT id FROM clientes WHERE dni = ?", [s.clienteDni]);
+            if (existing) {
+                clienteId = existing.id;
+            } else if (s.clienteNombre.trim()) {
+                DB.run("INSERT INTO clientes (nombre, dni, whatsapp) VALUES (?,?,?)", 
+                    [s.clienteNombre, s.clienteDni, s.clienteWhatsapp]);
+                clienteId = DB.getOne("SELECT last_insert_rowid() as id").id;
+            }
+        } else if (s.clienteNombre) {
             const existing = DB.getOne("SELECT id FROM clientes WHERE nombre = ?", [s.clienteNombre]);
             if (existing) {
                 clienteId = existing.id;
@@ -389,10 +434,10 @@ Pages.nuevaCotizacion = {
     enviarWhatsApp() {
         const s = this.state;
         const total = this.calcTotal();
-        const config = DB.getConfig('whatsapp_mensaje') || '¡Hola! Tu cotización de Milena\\'s:';
+        const config = DB.getConfig('whatsapp_mensaje') || "¡Hola! Tu cotización de Milena's:";
         
         let msg = `${config}\n\n`;
-        msg += `🎂 *Cotización Milena\\'s Pastelería*\n\n`;
+        msg += `🎂 *Cotización Milena's Pastelería*\n\n`;
         msg += `📐 Tamaño: ${s.tamano} porciones - Q.${s.precioTamano.toFixed(2)}\n`;
         msg += `🍰 Sabor: ${s.sabor}`;
         if (s.precioSabor > 0) msg += ` - Q.${s.precioSabor.toFixed(2)}`;
@@ -418,21 +463,81 @@ Pages.nuevaCotizacion = {
     },
 
     convertirPedido() {
-        // Save quotation first
-        this.guardarCotizacion();
-        App.showToast('Cotización guardada y convertida a pedido', 'success');
+        const s = this.state;
+        const total = this.calcTotal();
+        
+        const countCot = DB.getOne("SELECT COUNT(*) as c FROM cotizaciones").c + 1;
+        const countPed = DB.getOne("SELECT COUNT(*) as c FROM pedidos").c + 1;
+        const cNameSafe = (s.clienteNombre || 'anonimo').toLowerCase().replace(/[^a-z0-9]/g, '-').replace(/-+/g, '-').substring(0, 15);
+        
+        const numeroCot = `COT-${String(countCot).padStart(3, '0')}-${cNameSafe}`;
+        const numeroPed = `PED-${String(countPed).padStart(3, '0')}-${cNameSafe}`;
+        
+        // Manejar cliente igual que en guardar
+        let clienteId = null;
+        if (s.clienteDni) {
+            const exists = DB.getOne("SELECT id FROM clientes WHERE dni = ?", [s.clienteDni]);
+            if (exists) {
+                clienteId = exists.id;
+            } else if (s.clienteNombre.trim()) {
+                DB.run("INSERT INTO clientes (nombre, dni, whatsapp) VALUES (?,?,?)", [s.clienteNombre, s.clienteDni, s.clienteWhatsapp]);
+                clienteId = DB.getOne("SELECT last_insert_rowid() as id").id;
+            }
+        } else if (s.clienteNombre && s.clienteWhatsapp) {
+            const exists = DB.getOne("SELECT id FROM clientes WHERE whatsapp = ?", [s.clienteWhatsapp]);
+            if (exists) {
+                clienteId = exists.id;
+            } else {
+                DB.run("INSERT INTO clientes (nombre, whatsapp) VALUES (?,?)", [s.clienteNombre, s.clienteWhatsapp]);
+                clienteId = DB.getOne("SELECT last_insert_rowid() as id").id;
+            }
+        }
+
+        // Insertar la cotización como aceptada
+        DB.run(
+            `INSERT INTO cotizaciones (numero, cliente_id, cliente_nombre, tamano, precio_tamano, sabor, precio_sabor, diseno, precio_diseno, extras, observaciones, total, estado)
+             VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+            [numeroCot, clienteId, s.clienteNombre || 'Sin nombre', s.tamano, s.precioTamano,
+             s.sabor, s.precioSabor, s.diseno, s.precioDiseno,
+             JSON.stringify(s.extras), s.observaciones, total, 'aceptada']
+        );
+
+        // Obtener el ID de la cotización recién creada
+        const cot = DB.getOne("SELECT id FROM cotizaciones WHERE numero = ?", [numeroCot]);
+
+        // Insertar el pedido en preparación
+        const desc = `Pastel ${s.sabor} ${s.tamano} porc. - ${s.diseno}`;
+        // Como no pedimos fecha en la cotización, ponemos la de hoy + 2 días como placeholder
+        const fecha = new Date();
+        fecha.setDate(fecha.getDate() + 2);
+        const fechaStr = fecha.toISOString().split('T')[0];
+
+        DB.run(
+            `INSERT INTO pedidos (numero, cotizacion_id, cliente_id, cliente_nombre, descripcion, fecha_entrega, hora_entrega, estado, total, notas)
+             VALUES (?,?,?,?,?,?,?,?,?,?)`,
+            [numeroPed, cot ? cot.id : null, clienteId, s.clienteNombre || 'Sin nombre', desc, fechaStr, '12:00', 'en_preparacion', total, s.observaciones]
+        );
+
+        App.showToast('Cotización guardada y pedido creado en Preparación', 'success');
         
         // Navigate to pedidos
         setTimeout(() => { window.location.hash = 'pedidos'; }, 500);
     },
 
     resetForm() {
+        const firstSize = DB.getOne("SELECT * FROM catalogo WHERE categoria='tamano' AND activo=1 ORDER BY precio ASC");
+        const firstFlavor = DB.getOne("SELECT * FROM catalogo WHERE categoria='sabor' AND activo=1 ORDER BY precio ASC");
+        const firstDesign = DB.getOne("SELECT * FROM catalogo WHERE categoria='diseno' AND activo=1 ORDER BY precio ASC");
+
         this.state = {
-            tamano: 10, precioTamano: 120,
-            sabor: 'Vainilla', precioSabor: 0,
-            diseno: 'Básico', precioDiseno: 0,
+            tamano: firstSize ? parseInt(firstSize.nombre) : 10,
+            precioTamano: firstSize ? firstSize.precio : 120,
+            sabor: firstFlavor ? firstFlavor.nombre : 'Vainilla',
+            precioSabor: firstFlavor ? firstFlavor.precio : 0,
+            diseno: firstDesign ? firstDesign.nombre : 'Básico',
+            precioDiseno: firstDesign ? firstDesign.precio : 0,
             extras: [], observaciones: '',
-            clienteNombre: '', clienteWhatsapp: ''
+            clienteNombre: '', clienteDni: '', clienteWhatsapp: ''
         };
         // Re-render
         App.navigateTo('nueva-cotizacion');

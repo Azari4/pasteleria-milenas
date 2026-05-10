@@ -136,8 +136,25 @@ const App = {
     setupHeader() {
         // Notifications button
         document.getElementById('btn-notifications').addEventListener('click', () => {
-            this.showToast('No hay notificaciones nuevas', 'info');
+            const urgentes = DB.getAll("SELECT * FROM pedidos WHERE estado = 'en_preparacion' AND fecha_entrega <= date('now', '+2 days') ORDER BY fecha_entrega ASC");
+            if (urgentes.length === 0) {
+                this.showToast('No hay notificaciones nuevas', 'info');
+            } else {
+                let body = `<div style="max-height:50vh;overflow-y:auto;">`;
+                body += `<p style="font-size:.85rem;color:var(--text-medium);margin-bottom:.8rem;">Pedidos con entrega en las próximas 48 horas:</p>`;
+                urgentes.forEach(p => {
+                    body += `<div style="padding:.6rem;background:var(--bg-main);border-radius:8px;margin-bottom:.5rem;font-size:.85rem;">
+                        <strong>${p.numero}</strong> — ${p.cliente_nombre || 'Sin cliente'}<br>
+                        <span style="color:var(--danger);">📅 Entrega: ${this.formatDate(p.fecha_entrega)} ${p.hora_entrega || ''}</span>
+                    </div>`;
+                });
+                body += `</div>`;
+                this.showModal('🔔 Notificaciones', body, `<button class="btn btn-outline" onclick="App.closeModal()">Cerrar</button>`);
+            }
         });
+        
+        // Update notification count
+        this.updateNotifications();
 
         // Search input
         document.getElementById('search-input').addEventListener('keyup', (e) => {
@@ -156,6 +173,16 @@ const App = {
                 }
             }
         });
+    },
+
+    updateNotifications() {
+        const count = DB.getOne("SELECT COUNT(*) as c FROM pedidos WHERE estado = 'en_preparacion' AND fecha_entrega <= date('now', '+2 days')");
+        const badge = document.getElementById('notification-badge');
+        if (badge) {
+            const n = count ? count.c : 0;
+            badge.textContent = n;
+            badge.style.display = n > 0 ? 'flex' : 'none';
+        }
     },
 
     navigateTo(page) {
@@ -178,7 +205,7 @@ const App = {
             'usuarios': 'Gestión de Usuarios',
             'configuracion': 'Configuración'
         };
-        document.getElementById('page-title').textContent = titles[page] || 'Milena\\'s';
+        document.getElementById('page-title').textContent = titles[page] || "Milena's";
 
         // Page key mapping
         const pageKeys = {
@@ -215,6 +242,9 @@ const App = {
             if (pageModule.init) pageModule.init();
             
             this.currentPage = page;
+            
+            // Update notifications count
+            this.updateNotifications();
         }
     },
 

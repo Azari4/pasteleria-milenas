@@ -48,6 +48,7 @@ Pages.clientes = {
                 <div><div class="client-name">${c.nombre}</div><div class="client-meta">Desde ${App.formatDate(c.created_at)}</div></div>
             </div>
             <div class="client-details">
+                ${c.dni?`<p><i data-lucide="credit-card"></i> DNI: ${c.dni}</p>`:''}
                 ${c.whatsapp?`<p><i data-lucide="phone"></i> ${c.whatsapp}</p>`:''}
                 ${c.email?`<p><i data-lucide="mail"></i> ${c.email}</p>`:''}
                 ${c.direccion?`<p><i data-lucide="map-pin"></i> ${c.direccion}</p>`:''}
@@ -55,8 +56,9 @@ Pages.clientes = {
             <div class="client-card-footer">
                 <div class="client-stats"><strong>${cotCount}</strong> cot. · <strong>${pedCount}</strong> ped.<br>Total: <strong class="text-primary">${App.formatCurrency(totalG)}</strong></div>
                 <div class="actions">
-                    <button class="btn btn-sm btn-outline btn-icon" onclick="Pages.clientes.editar(${c.id})"><i data-lucide="edit-2"></i></button>
-                    <button class="btn btn-sm btn-outline btn-icon" onclick="Pages.clientes.eliminar(${c.id})"><i data-lucide="trash-2"></i></button>
+                    <button class="btn btn-sm btn-outline btn-icon" title="Ver Historial" onclick="Pages.clientes.verHistorial(${c.id})"><i data-lucide="clock"></i></button>
+                    <button class="btn btn-sm btn-outline btn-icon" title="Editar" onclick="Pages.clientes.editar(${c.id})"><i data-lucide="edit-2"></i></button>
+                    <button class="btn btn-sm btn-outline btn-icon" title="Eliminar" onclick="Pages.clientes.eliminar(${c.id})"><i data-lucide="trash-2"></i></button>
                 </div>
             </div>
         </div>`;
@@ -79,6 +81,7 @@ Pages.clientes = {
     showAdd() {
         App.showModal('Nuevo Cliente', `
             <div class="form-group"><label class="form-label">Nombre *</label><input type="text" id="nc-nombre" class="form-input" placeholder="Nombre"></div>
+            <div class="form-group"><label class="form-label">DNI</label><input type="text" id="nc-dni" class="form-input" placeholder="Número de identificación"></div>
             <div class="form-group"><label class="form-label">WhatsApp</label><input type="text" id="nc-whatsapp" class="form-input" placeholder="WhatsApp"></div>
             <div class="form-group"><label class="form-label">Email</label><input type="email" id="nc-email" class="form-input" placeholder="Email"></div>
             <div class="form-group"><label class="form-label">Dirección</label><input type="text" id="nc-dir" class="form-input" placeholder="Dirección"></div>
@@ -89,7 +92,7 @@ Pages.clientes = {
     guardarNuevo() {
         const n=document.getElementById('nc-nombre').value.trim();
         if(!n){App.showToast('Nombre requerido','error');return;}
-        DB.run("INSERT INTO clientes (nombre,whatsapp,email,direccion,notas) VALUES(?,?,?,?,?)",[n,document.getElementById('nc-whatsapp').value.trim(),document.getElementById('nc-email').value.trim(),document.getElementById('nc-dir').value.trim(),document.getElementById('nc-notas').value.trim()]);
+        DB.run("INSERT INTO clientes (nombre,dni,whatsapp,email,direccion,notas) VALUES(?,?,?,?,?,?)",[n,document.getElementById('nc-dni').value.trim(),document.getElementById('nc-whatsapp').value.trim(),document.getElementById('nc-email').value.trim(),document.getElementById('nc-dir').value.trim(),document.getElementById('nc-notas').value.trim()]);
         App.closeModal(); App.showToast('Cliente agregado','success'); App.navigateTo('clientes');
     },
 
@@ -97,6 +100,7 @@ Pages.clientes = {
         const c=DB.getOne("SELECT * FROM clientes WHERE id=?",[id]); if(!c) return;
         App.showModal('Editar Cliente', `
             <div class="form-group"><label class="form-label">Nombre *</label><input type="text" id="ec-nombre" class="form-input" value="${c.nombre}"></div>
+            <div class="form-group"><label class="form-label">DNI</label><input type="text" id="ec-dni" class="form-input" value="${c.dni||''}"></div>
             <div class="form-group"><label class="form-label">WhatsApp</label><input type="text" id="ec-whatsapp" class="form-input" value="${c.whatsapp||''}"></div>
             <div class="form-group"><label class="form-label">Email</label><input type="email" id="ec-email" class="form-input" value="${c.email||''}"></div>
             <div class="form-group"><label class="form-label">Dirección</label><input type="text" id="ec-dir" class="form-input" value="${c.direccion||''}"></div>
@@ -107,11 +111,83 @@ Pages.clientes = {
     guardarEdit(id) {
         const n=document.getElementById('ec-nombre').value.trim();
         if(!n){App.showToast('Nombre requerido','error');return;}
-        DB.run("UPDATE clientes SET nombre=?,whatsapp=?,email=?,direccion=?,notas=? WHERE id=?",[n,document.getElementById('ec-whatsapp').value.trim(),document.getElementById('ec-email').value.trim(),document.getElementById('ec-dir').value.trim(),document.getElementById('ec-notas').value.trim(),id]);
+        DB.run("UPDATE clientes SET nombre=?,dni=?,whatsapp=?,email=?,direccion=?,notas=? WHERE id=?",[n,document.getElementById('ec-dni').value.trim(),document.getElementById('ec-whatsapp').value.trim(),document.getElementById('ec-email').value.trim(),document.getElementById('ec-dir').value.trim(),document.getElementById('ec-notas').value.trim(),id]);
         App.closeModal(); App.showToast('Cliente actualizado','success'); App.navigateTo('clientes');
     },
 
     eliminar(id) {
         if(confirm('¿Eliminar este cliente?')){DB.run("DELETE FROM clientes WHERE id=?",[id]);App.showToast('Cliente eliminado','success');App.navigateTo('clientes');}
+    },
+
+    verHistorial(id) {
+        const c = DB.getOne("SELECT * FROM clientes WHERE id=?", [id]);
+        if(!c) return;
+
+        const pedidos = DB.getAll("SELECT * FROM pedidos WHERE cliente_id=? ORDER BY created_at DESC", [id]);
+        const cotizaciones = DB.getAll("SELECT * FROM cotizaciones WHERE cliente_id=? AND estado='pendiente' ORDER BY created_at DESC", [id]);
+        
+        let html = `<div style="max-height: 60vh; overflow-y: auto;">`;
+        
+        html += `<h4 style="margin-bottom:.5rem; color:var(--primary); font-size:1rem;"><i data-lucide="file-text" style="width:16px;height:16px;display:inline-block;vertical-align:text-bottom;"></i> Cotizaciones Pendientes</h4>`;
+        if (cotizaciones.length === 0) {
+            html += `<p class="text-muted" style="font-size:.85rem; margin-bottom:1.5rem;">No hay cotizaciones pendientes.</p>`;
+        } else {
+            html += `<table class="data-table" style="font-size: .85rem; margin-bottom:1.5rem;">
+                <thead>
+                    <tr>
+                        <th>Cotización</th>
+                        <th>Detalle</th>
+                        <th>Total</th>
+                        <th>Fecha</th>
+                    </tr>
+                </thead>
+                <tbody>`;
+            cotizaciones.forEach(cot => {
+                html += `
+                    <tr>
+                        <td><strong>${cot.numero}</strong></td>
+                        <td>${cot.tamano} porc. - ${cot.sabor}</td>
+                        <td>${App.formatCurrency(cot.total)}</td>
+                        <td>${App.formatDate(cot.created_at)}</td>
+                    </tr>
+                `;
+            });
+            html += `</tbody></table>`;
+        }
+
+        html += `<h4 style="margin-bottom:.5rem; color:var(--primary); font-size:1rem;"><i data-lucide="shopping-bag" style="width:16px;height:16px;display:inline-block;vertical-align:text-bottom;"></i> Historial de Pedidos</h4>`;
+        if (pedidos.length === 0) {
+            html += `<p class="text-muted" style="font-size:.85rem;">Este cliente no tiene pedidos registrados.</p>`;
+        } else {
+            html += `<table class="data-table" style="font-size: .85rem;">
+                <thead>
+                    <tr>
+                        <th>Pedido</th>
+                        <th>Descripción</th>
+                        <th>Estado</th>
+                        <th>Total</th>
+                        <th>Entrega</th>
+                    </tr>
+                </thead>
+                <tbody>`;
+            pedidos.forEach(p => {
+                html += `
+                    <tr>
+                        <td><strong>${p.numero}</strong></td>
+                        <td style="max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${p.descripcion || '—'}</td>
+                        <td><span class="status-badge status-${p.estado}">${App.statusLabel(p.estado)}</span></td>
+                        <td>${App.formatCurrency(p.total)}</td>
+                        <td>${App.formatDate(p.fecha_entrega)}</td>
+                    </tr>
+                `;
+            });
+            html += `</tbody></table>`;
+        }
+        html += `</div>`;
+
+        App.showModal(`Historial de: ${c.nombre}`, html, `<button class="btn btn-outline" onclick="App.closeModal()">Cerrar</button>`);
+        
+        // Re-initialize icons inside modal
+        setTimeout(() => { if(window.lucide) lucide.createIcons(); }, 10);
     }
 };

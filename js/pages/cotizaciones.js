@@ -107,9 +107,12 @@ Pages.cotizaciones = {
                     <button class="btn btn-sm btn-outline btn-icon" title="Eliminar" onclick="Pages.cotizaciones.eliminar(${c.id})">
                         <i data-lucide="trash-2"></i>
                     </button>
-                    ${c.estado !== 'aceptada' ? `
+                    ${c.estado !== 'aceptada' && c.estado !== 'rechazada' ? `
                     <button class="btn btn-sm btn-primary btn-icon" title="Aceptar" onclick="Pages.cotizaciones.cambiarEstado(${c.id}, 'aceptada')">
                         <i data-lucide="check"></i>
+                    </button>
+                    <button class="btn btn-sm btn-outline btn-icon text-danger" title="Rechazar" onclick="if(confirm('¿Marcar cotización como rechazada?')) Pages.cotizaciones.cambiarEstado(${c.id}, 'rechazada')">
+                        <i data-lucide="x"></i>
                     </button>` : ''}
                 </td>
             </tr>
@@ -189,6 +192,30 @@ Pages.cotizaciones = {
 
     cambiarEstado(id, estado) {
         DB.run("UPDATE cotizaciones SET estado = ? WHERE id = ?", [estado, id]);
+        
+        if (estado === 'aceptada') {
+            const c = DB.getOne("SELECT * FROM cotizaciones WHERE id = ?", [id]);
+            if (c) {
+                // Verificar si ya existe el pedido
+                const existe = DB.getOne("SELECT id FROM pedidos WHERE cotizacion_id = ?", [id]);
+                if (!existe) {
+                    const countPed = DB.getOne("SELECT COUNT(*) as c FROM pedidos").c + 1;
+                    const cNameSafe = (c.cliente_nombre || 'anonimo').toLowerCase().replace(/[^a-z0-9]/g, '-').replace(/-+/g, '-').substring(0, 15);
+                    const numeroPed = `PED-${String(countPed).padStart(3, '0')}-${cNameSafe}`;
+                    const desc = `Pastel ${c.sabor} ${c.tamano} porc. - ${c.diseno}`;
+                    const fecha = new Date();
+                    fecha.setDate(fecha.getDate() + 2);
+                    const fechaStr = fecha.toISOString().split('T')[0];
+                    
+                    DB.run(
+                        `INSERT INTO pedidos (numero, cotizacion_id, cliente_id, cliente_nombre, descripcion, fecha_entrega, hora_entrega, estado, total, notas)
+                         VALUES (?,?,?,?,?,?,?,?,?,?)`,
+                        [numeroPed, c.id, c.cliente_id, c.cliente_nombre, desc, fechaStr, '12:00', 'en_preparacion', c.total, c.observaciones]
+                    );
+                }
+            }
+        }
+
         App.showToast(`Estado actualizado a: ${App.statusLabel(estado)}`, 'success');
         App.navigateTo('cotizaciones');
     }
