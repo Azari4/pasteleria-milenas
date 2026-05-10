@@ -290,7 +290,7 @@ Pages.nuevaCotizacion = {
             dniInput.addEventListener('input', (e) => {
                 this.state.clienteDni = e.target.value;
             });
-            dniInput.addEventListener('blur', () => {
+            const checkDni = () => {
                 const dni = this.state.clienteDni.trim();
                 if (!dni) return;
                 const found = DB.getOne("SELECT * FROM clientes WHERE dni = ?", [dni]);
@@ -304,6 +304,10 @@ Pages.nuevaCotizacion = {
                 } else {
                     if (msg) { msg.textContent = ''; msg.style.display = 'none'; }
                 }
+            };
+            dniInput.addEventListener('blur', checkDni);
+            dniInput.addEventListener('keyup', (e) => {
+                if (e.key === 'Enter') checkDni();
             });
         }
         if (nameInput) {
@@ -435,11 +439,18 @@ Pages.nuevaCotizacion = {
         const s = this.state;
         const total = this.calcTotal();
 
-        // Validar DNI si se va a guardar cliente
-        if (s.guardarCliente && s.clienteNombre.trim() && !s.clienteDni.trim()) {
-            App.showToast('Por favor ingresa el DNI del cliente para guardarlo', 'error');
-            document.getElementById('cot-cliente-dni')?.focus();
-            return;
+        // Validar si se va a guardar cliente
+        if (s.guardarCliente) {
+            if (!s.clienteDni || !s.clienteDni.trim()) {
+                App.showToast('Por favor ingresa el DNI para guardar el cliente', 'error');
+                document.getElementById('cot-cliente-dni')?.focus();
+                return;
+            }
+            if (!s.clienteNombre || !s.clienteNombre.trim()) {
+                App.showToast('Por favor ingresa el nombre para guardar el cliente', 'error');
+                document.getElementById('cot-cliente-nombre')?.focus();
+                return;
+            }
         }
 
         const clienteId = this._resolverClienteId(s);
@@ -515,10 +526,18 @@ Pages.nuevaCotizacion = {
         const s = this.state;
         const total = this.calcTotal();
 
-        // Validar DNI si se va a guardar cliente
-        if (s.guardarCliente && s.clienteNombre.trim() && !s.clienteDni.trim()) {
-            App.showToast('Por favor ingresa el DNI del cliente para guardarlo', 'error');
-            return;
+        // Validar si se va a guardar cliente
+        if (s.guardarCliente) {
+            if (!s.clienteDni || !s.clienteDni.trim()) {
+                App.showToast('Por favor ingresa el DNI para guardar el cliente', 'error');
+                document.getElementById('cot-cliente-dni')?.focus();
+                return;
+            }
+            if (!s.clienteNombre || !s.clienteNombre.trim()) {
+                App.showToast('Por favor ingresa el nombre para guardar el cliente', 'error');
+                document.getElementById('cot-cliente-nombre')?.focus();
+                return;
+            }
         }
 
         const clienteId = this._resolverClienteId(s);

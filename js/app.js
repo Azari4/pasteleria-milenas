@@ -136,7 +136,10 @@ const App = {
     setupHeader() {
         // Notifications button
         document.getElementById('btn-notifications').addEventListener('click', () => {
-            const urgentes = DB.getAll("SELECT * FROM pedidos WHERE estado = 'en_preparacion' AND fecha_entrega <= date('now', '+2 days') ORDER BY fecha_entrega ASC");
+            const target = new Date();
+            target.setDate(target.getDate() + 2);
+            const limitStr = target.toISOString().split('T')[0];
+            const urgentes = DB.getAll("SELECT * FROM pedidos WHERE estado = 'en_preparacion' AND fecha_entrega <= ? ORDER BY fecha_entrega ASC", [limitStr]);
             if (urgentes.length === 0) {
                 this.showToast('No hay notificaciones nuevas', 'info');
             } else {
@@ -159,7 +162,10 @@ const App = {
     },
 
     updateNotifications() {
-        const count = DB.getOne("SELECT COUNT(*) as c FROM pedidos WHERE estado = 'en_preparacion' AND fecha_entrega <= date('now', '+2 days')");
+        const target = new Date();
+        target.setDate(target.getDate() + 2);
+        const limitStr = target.toISOString().split('T')[0];
+        const count = DB.getOne("SELECT COUNT(*) as c FROM pedidos WHERE estado = 'en_preparacion' AND fecha_entrega <= ?", [limitStr]);
         const badge = document.getElementById('notification-badge');
         if (badge) {
             const n = count ? count.c : 0;
