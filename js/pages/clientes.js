@@ -80,8 +80,8 @@ Pages.clientes = {
 
     showAdd() {
         App.showModal('Nuevo Cliente', `
-            <div class="form-group"><label class="form-label">Nombre *</label><input type="text" id="nc-nombre" class="form-input" placeholder="Nombre"></div>
-            <div class="form-group"><label class="form-label">DNI</label><input type="text" id="nc-dni" class="form-input" placeholder="Número de identificación"></div>
+            <div class="form-group"><label class="form-label">DNI / Identificación *</label><input type="text" id="nc-dni" class="form-input" placeholder="Número de identificación" autofocus></div>
+            <div class="form-group"><label class="form-label">Nombre</label><input type="text" id="nc-nombre" class="form-input" placeholder="Nombre completo"></div>
             <div class="form-group"><label class="form-label">WhatsApp</label><input type="text" id="nc-whatsapp" class="form-input" placeholder="WhatsApp"></div>
             <div class="form-group"><label class="form-label">Email</label><input type="email" id="nc-email" class="form-input" placeholder="Email"></div>
             <div class="form-group"><label class="form-label">Dirección</label><input type="text" id="nc-dir" class="form-input" placeholder="Dirección"></div>
@@ -90,10 +90,18 @@ Pages.clientes = {
     },
 
     guardarNuevo() {
-        const n=document.getElementById('nc-nombre').value.trim();
-        if(!n){App.showToast('Nombre requerido','error');return;}
-        DB.run("INSERT INTO clientes (nombre,dni,whatsapp,email,direccion,notas) VALUES(?,?,?,?,?,?)",[n,document.getElementById('nc-dni').value.trim(),document.getElementById('nc-whatsapp').value.trim(),document.getElementById('nc-email').value.trim(),document.getElementById('nc-dir').value.trim(),document.getElementById('nc-notas').value.trim()]);
-        App.closeModal(); App.showToast('Cliente agregado','success'); App.navigateTo('clientes');
+        const dni = document.getElementById('nc-dni').value.trim();
+        if (!dni) { App.showToast('El DNI es requerido', 'error'); return; }
+        const existing = DB.getOne("SELECT id FROM clientes WHERE dni = ?", [dni]);
+        if (existing) { App.showToast('Ya existe un cliente con ese DNI', 'error'); return; }
+        const nombre = document.getElementById('nc-nombre').value.trim();
+        DB.run("INSERT INTO clientes (nombre,dni,whatsapp,email,direccion,notas) VALUES(?,?,?,?,?,?)",
+            [nombre || 'Sin nombre', dni,
+             document.getElementById('nc-whatsapp').value.trim(),
+             document.getElementById('nc-email').value.trim(),
+             document.getElementById('nc-dir').value.trim(),
+             document.getElementById('nc-notas').value.trim()]);
+        App.closeModal(); App.showToast('Cliente agregado', 'success'); App.navigateTo('clientes');
     },
 
     editar(id) {

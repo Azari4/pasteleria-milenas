@@ -336,28 +336,28 @@ Pages.cotizaciones = {
     },
 
     cambiarEstado(id, estado) {
-        DB.run("UPDATE cotizaciones SET estado = ? WHERE id = ?", [estado, id]);
-        
         if (estado === 'aceptada') {
-            const c = DB.getOne("SELECT * FROM cotizaciones WHERE id = ?", [id]);
-            if (c) {
-                const count = DB.getOne("SELECT COUNT(*) as c FROM pedidos").c + 1;
-                const numeroPed = `PED-${String(count).padStart(3, '0')}`;
-                const desc = `Pastel ${c.sabor} ${c.tamano} porc. - ${c.diseno}`;
-                const fecha = new Date();
-                fecha.setDate(fecha.getDate() + 2);
-                const fechaStr = fecha.toISOString().split('T')[0];
-
-                DB.run(
-                    `INSERT INTO pedidos (numero, cotizacion_id, cliente_id, cliente_nombre, descripcion, fecha_entrega, hora_entrega, estado, total, notas)
-                     VALUES (?,?,?,?,?,?,?,?,?,?)`,
-                    [numeroPed, c.id, c.cliente_id, c.cliente_nombre, desc, fechaStr, '12:00', 'en_preparacion', c.total, c.observaciones || '']
-                );
-                App.showToast(`Cotización aceptada y pedido ${numeroPed} creado`, 'success');
-            }
+            // Pedir fecha de entrega antes de crear el pedido
+            Pages.pedidos.pedirFechaYCrear((fecha, hora) => {
+                DB.run("UPDATE cotizaciones SET estado = ? WHERE id = ?", [estado, id]);
+                const c = DB.getOne("SELECT * FROM cotizaciones WHERE id = ?", [id]);
+                if (c) {
+                    const count = DB.getOne("SELECT COUNT(*) as c FROM pedidos").c + 1;
+                    const numeroPed = `PED-${String(count).padStart(3, '0')}`;
+                    const desc = `Pastel ${c.sabor} ${c.tamano} porc. - ${c.diseno}`;
+                    DB.run(
+                        `INSERT INTO pedidos (numero, cotizacion_id, cliente_id, cliente_nombre, descripcion, fecha_entrega, hora_entrega, estado, total, notas)
+                         VALUES (?,?,?,?,?,?,?,?,?,?)`,
+                        [numeroPed, c.id, c.cliente_id, c.cliente_nombre, desc, fecha, hora, 'en_preparacion', c.total, c.observaciones || '']
+                    );
+                    App.showToast(`Cotización aceptada. Pedido ${numeroPed} para el ${App.formatDate(fecha)}`, 'success');
+                }
+                this.refreshTable();
+            });
         } else {
-            App.showToast(`Estado actualizado`, 'success');
+            DB.run("UPDATE cotizaciones SET estado = ? WHERE id = ?", [estado, id]);
+            App.showToast('Estado actualizado', 'success');
+            this.refreshTable();
         }
-        this.refreshTable();
     }
 };

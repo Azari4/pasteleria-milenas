@@ -31,24 +31,24 @@ Pages.reportes = {
         </div>
         <div class="charts-grid">
             <div class="chart-card">
-                <h3>📊 Cotizaciones por estado</h3>
+                <h3>Cotizaciones por estado</h3>
                 <canvas id="chart-estados"></canvas>
             </div>
             <div class="chart-card">
-                <h3>🍰 Sabores más populares</h3>
+                <h3>Sabores más populares</h3>
                 <canvas id="chart-sabores"></canvas>
             </div>
             <div class="chart-card">
-                <h3>📐 Tamaños más solicitados</h3>
+                <h3>Tamaños más solicitados</h3>
                 <canvas id="chart-tamanos"></canvas>
             </div>
             <div class="chart-card">
-                <h3>💰 Ingresos por cliente (Top 5)</h3>
+                <h3>Ingresos por cliente (Top 5)</h3>
                 <canvas id="chart-clientes"></canvas>
             </div>
         </div>
         <div class="card mt-2">
-            <div class="card-header"><span>📋 Actividad reciente</span></div>
+            <div class="card-header"><span>Actividad reciente</span></div>
             <div class="card-body" style="padding:0;overflow-x:auto;">
                 <table class="data-table">
                     <thead><tr><th>Tipo</th><th>Número</th><th>Cliente</th><th>Total</th><th>Fecha</th></tr></thead>

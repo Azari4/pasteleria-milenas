@@ -156,23 +156,6 @@ const App = {
         // Update notification count
         this.updateNotifications();
 
-        // Search input
-        document.getElementById('search-input').addEventListener('keyup', (e) => {
-            if (e.key === 'Enter') {
-                const query = e.target.value.trim();
-                if (query) {
-                    const clients = DB.getAll(
-                        "SELECT * FROM clientes WHERE nombre LIKE ? OR whatsapp LIKE ?",
-                        [`%${query}%`, `%${query}%`]
-                    );
-                    if (clients.length > 0) {
-                        this.showToast(`Se encontró: ${clients[0].nombre}`, 'success');
-                    } else {
-                        this.showToast('No se encontraron clientes', 'warning');
-                    }
-                }
-            }
-        });
     },
 
     updateNotifications() {

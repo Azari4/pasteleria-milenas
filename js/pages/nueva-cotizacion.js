@@ -1,4 +1,4 @@
-/* =============================================
+﻿/* =============================================
    PAGE: Nueva Cotización
    ============================================= */
 window.Pages = window.Pages || {};
@@ -434,6 +434,14 @@ Pages.nuevaCotizacion = {
     guardarCotizacion() {
         const s = this.state;
         const total = this.calcTotal();
+
+        // Validar DNI si se va a guardar cliente
+        if (s.guardarCliente && s.clienteNombre.trim() && !s.clienteDni.trim()) {
+            App.showToast('Por favor ingresa el DNI del cliente para guardarlo', 'error');
+            document.getElementById('cot-cliente-dni')?.focus();
+            return;
+        }
+
         const clienteId = this._resolverClienteId(s);
 
         if (s.editingId) {
@@ -470,35 +478,49 @@ Pages.nuevaCotizacion = {
         // Solo genera y abre el link. NO guarda, NO resetea.
         const s = this.state;
         const total = this.calcTotal();
-        const config = DB.getConfig('whatsapp_mensaje') || "¡Hola! Tu cotización de Milena's:";
+        const config = DB.getConfig('whatsapp_mensaje') || "Hola! Tu cotizacion de Milena's Pasteleria:";
         
-        let msg = `${config}\n\n`;
-        msg += `🎂 *Cotización Milena's Pastelería*\n\n`;
-        msg += `📐 Tamaño: ${s.tamano} porciones - ${App.formatCurrency(s.precioTamano)}\n`;
-        msg += `🍰 Sabor: ${s.sabor}`;
-        if (s.precioSabor > 0) msg += ` - ${App.formatCurrency(s.precioSabor)}`;
-        msg += `\n`;
-        msg += `🎨 Diseño: ${s.diseno}`;
-        if (s.precioDiseno > 0) msg += ` - ${App.formatCurrency(s.precioDiseno)}`;
-        msg += `\n`;
+        let msg = ${config}\n\n;
+        msg += --- Cotizacion de Milena's Pasteleria ---\n\n;
+        msg += Tamano: ${s.tamano} porciones - ${App.formatCurrency(s.precioTamano)}\n;
+        msg += Sabor: ${s.sabor};
+        if (s.precioSabor > 0) msg +=  - ${App.formatCurrency(s.precioSabor)};
+        msg += \n;
+        msg += Diseno: ${s.diseno};
+        if (s.precioDiseno > 0) msg +=  - ${App.formatCurrency(s.precioDiseno)};
+        msg += \n;
         
         if (s.extras.length > 0) {
-            msg += `\n✨ Extras:\n`;
-            s.extras.forEach(e => { msg += `  • ${e.nombre} - ${App.formatCurrency(e.precio)}\n`; });
+            msg += \nExtras:\n;
+            s.extras.forEach(e => { msg +=   - ${e.nombre}: ${App.formatCurrency(e.precio)}\n; });
         }
-        msg += `\n💰 *Total: ${App.formatCurrency(total)}*`;
+        msg += \n*TOTAL: ${App.formatCurrency(total)}*;
         
-        if (s.observaciones) msg += `\n\n📝 Nota: ${s.observaciones}`;
+        if (s.observaciones) msg += \n\nNota: ${s.observaciones};
 
         const phone = s.clienteWhatsapp || '';
-        const url = `https://wa.me/${phone}?text=${encodeURIComponent(msg)}`;
+        const url = https://wa.me/${phone}?text=${encodeURIComponent(msg)};
         window.open(url, '_blank');
-        // El formulario queda intacto — sin guardar ni resetear
+        // El formulario queda intacto
     },
 
     convertirPedido() {
+        // Primero pedimos la fecha de entrega
+        Pages.pedidos.pedirFechaYCrear((fecha, hora) => {
+            this._crearPedidoConFecha(fecha, hora);
+        });
+    },
+
+    _crearPedidoConFecha(fechaEntrega, horaEntrega) {
         const s = this.state;
         const total = this.calcTotal();
+
+        // Validar DNI si se va a guardar cliente
+        if (s.guardarCliente && s.clienteNombre.trim() && !s.clienteDni.trim()) {
+            App.showToast('Por favor ingresa el DNI del cliente para guardarlo', 'error');
+            return;
+        }
+
         const clienteId = this._resolverClienteId(s);
 
         const countCot = DB.getOne("SELECT COUNT(*) as c FROM cotizaciones").c + 1;
@@ -520,17 +542,15 @@ Pages.nuevaCotizacion = {
         const cot = DB.getOne("SELECT id FROM cotizaciones WHERE numero = ?", [numeroCot]);
 
         const desc = `Pastel ${s.sabor} ${s.tamano} porc. - ${s.diseno}`;
-        const fecha = new Date();
-        fecha.setDate(fecha.getDate() + 2);
-        const fechaStr = fecha.toISOString().split('T')[0];
 
         DB.run(
             `INSERT INTO pedidos (numero, cotizacion_id, cliente_id, cliente_nombre, descripcion, fecha_entrega, hora_entrega, estado, total, notas)
              VALUES (?,?,?,?,?,?,?,?,?,?)`,
-            [numeroPed, cot ? cot.id : null, clienteId, s.clienteNombre || 'Sin nombre', desc, fechaStr, '12:00', 'en_preparacion', total, s.observaciones]
+            [numeroPed, cot ? cot.id : null, clienteId, s.clienteNombre || 'Sin nombre',
+             desc, fechaEntrega, horaEntrega, 'en_preparacion', total, s.observaciones]
         );
 
-        App.showToast('Cotización guardada y pedido creado en Preparación', 'success');
+        App.showToast(`Pedido ${numeroPed} creado para el ${App.formatDate(fechaEntrega)}`, 'success');
         this.resetForm();
         setTimeout(() => { window.location.hash = 'pedidos'; }, 500);
     },

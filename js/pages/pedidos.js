@@ -5,7 +5,7 @@ window.Pages = window.Pages || {};
 
 Pages.pedidos = {
     render() {
-        const pedidos = DB.getAll("SELECT * FROM pedidos ORDER BY fecha_entrega ASC");
+        const pedidos = DB.getAll("SELECT p.*, cl.dni FROM pedidos p LEFT JOIN clientes cl ON p.cliente_id = cl.id ORDER BY p.fecha_entrega ASC");
         const enPreparacion = pedidos.filter(p => p.estado === 'en_preparacion');
         const listos = pedidos.filter(p => p.estado === 'listo');
         const entregados = pedidos.filter(p => p.estado === 'entregado');
@@ -15,31 +15,19 @@ Pages.pedidos = {
         <div class="stats-grid">
             <div class="stat-card">
                 <div class="stat-icon pink"><i data-lucide="shopping-bag"></i></div>
-                <div class="stat-info">
-                    <h3>${pedidos.length}</h3>
-                    <p>Total pedidos</p>
-                </div>
+                <div class="stat-info"><h3>${pedidos.length}</h3><p>Total pedidos</p></div>
             </div>
             <div class="stat-card">
                 <div class="stat-icon orange"><i data-lucide="clock"></i></div>
-                <div class="stat-info">
-                    <h3>${enPreparacion.length}</h3>
-                    <p>En preparación</p>
-                </div>
+                <div class="stat-info"><h3>${enPreparacion.length}</h3><p>En preparación</p></div>
             </div>
             <div class="stat-card">
                 <div class="stat-icon blue"><i data-lucide="check-square"></i></div>
-                <div class="stat-info">
-                    <h3>${listos.length}</h3>
-                    <p>Listos</p>
-                </div>
+                <div class="stat-info"><h3>${listos.length}</h3><p>Listos</p></div>
             </div>
             <div class="stat-card">
                 <div class="stat-icon green"><i data-lucide="truck"></i></div>
-                <div class="stat-info">
-                    <h3>${entregados.length}</h3>
-                    <p>Entregados</p>
-                </div>
+                <div class="stat-info"><h3>${entregados.length}</h3><p>Entregados</p></div>
             </div>
         </div>
 
@@ -48,7 +36,7 @@ Pages.pedidos = {
             <!-- En preparación -->
             <div class="kanban-column kanban-col-prep" ondragover="event.preventDefault()" ondrop="Pages.pedidos.drop(event, 'en_preparacion')">
                 <div class="kanban-column-header">
-                    <h3>🔥 En preparación</h3>
+                    <h3>En preparación</h3>
                     <span class="kanban-count">${enPreparacion.length}</span>
                 </div>
                 ${enPreparacion.map(p => this.renderKanbanCard(p)).join('')}
@@ -58,7 +46,7 @@ Pages.pedidos = {
             <!-- Listos -->
             <div class="kanban-column kanban-col-ready" ondragover="event.preventDefault()" ondrop="Pages.pedidos.drop(event, 'listo')">
                 <div class="kanban-column-header">
-                    <h3>✅ Listo para entrega</h3>
+                    <h3>Listo para entrega</h3>
                     <span class="kanban-count">${listos.length}</span>
                 </div>
                 ${listos.map(p => this.renderKanbanCard(p)).join('')}
@@ -68,7 +56,7 @@ Pages.pedidos = {
             <!-- Entregados -->
             <div class="kanban-column kanban-col-delivered" ondragover="event.preventDefault()" ondrop="Pages.pedidos.drop(event, 'entregado')">
                 <div class="kanban-column-header">
-                    <h3>📦 Entregados</h3>
+                    <h3>Entregados</h3>
                     <span class="kanban-count">${entregados.length}</span>
                 </div>
                 ${entregados.map(p => this.renderKanbanCard(p)).join('')}
@@ -78,15 +66,14 @@ Pages.pedidos = {
 
         <!-- Orders Table -->
         <div class="card mt-2">
-            <div class="card-header">
-                <span>📋 Todos los pedidos</span>
-            </div>
+            <div class="card-header"><span>Todos los pedidos</span></div>
             <div class="card-body" style="padding:0;overflow-x:auto;">
                 <table class="data-table">
                     <thead>
                         <tr>
                             <th>#</th>
                             <th>Cliente</th>
+                            <th>DNI</th>
                             <th>Descripción</th>
                             <th>Entrega</th>
                             <th>Total</th>
@@ -99,7 +86,8 @@ Pages.pedidos = {
                             <tr>
                                 <td><strong>${p.numero}</strong></td>
                                 <td>${p.cliente_nombre || '—'}</td>
-                                <td style="max-width:250px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${p.descripcion || '—'}</td>
+                                <td style="font-size:.82rem;color:var(--text-medium);">${p.dni || '—'}</td>
+                                <td style="max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${p.descripcion || '—'}</td>
                                 <td>${App.formatDate(p.fecha_entrega)} ${p.hora_entrega || ''}</td>
                                 <td><strong>${App.formatCurrency(p.total)}</strong></td>
                                 <td><span class="status-badge status-${p.estado}">${App.statusLabel(p.estado)}</span></td>
@@ -124,7 +112,7 @@ Pages.pedidos = {
             <h4>${p.numero} — ${p.cliente_nombre || 'Sin cliente'}</h4>
             <div class="order-info">
                 ${p.descripcion || 'Sin descripción'}<br>
-                📅 ${App.formatDate(p.fecha_entrega)} ${p.hora_entrega || ''}
+                ${App.formatDate(p.fecha_entrega)} ${p.hora_entrega || ''}
             </div>
             <div class="order-footer">
                 <span class="order-total">${App.formatCurrency(p.total)}</span>
@@ -144,18 +132,17 @@ Pages.pedidos = {
     drop(event, nuevoEstado) {
         event.preventDefault();
         const id = event.dataTransfer.getData('pedido_id');
-        if (id) {
-            this.cambiarEstado(id, nuevoEstado);
-        }
+        if (id) this.cambiarEstado(id, nuevoEstado);
     },
 
     verDetalle(id) {
-        const p = DB.getOne("SELECT * FROM pedidos WHERE id = ?", [id]);
+        const p = DB.getOne("SELECT p.*, cl.dni FROM pedidos p LEFT JOIN clientes cl ON p.cliente_id = cl.id WHERE p.id = ?", [id]);
         if (!p) return;
 
         App.showModal(`Pedido ${p.numero}`, `
             <div style="display:grid;grid-template-columns:1fr 1fr;gap:.5rem .8rem;font-size:.9rem;">
                 <p><strong>Cliente:</strong></p><p>${p.cliente_nombre || '—'}</p>
+                <p><strong>DNI:</strong></p><p>${p.dni || '—'}</p>
                 <p><strong>Descripción:</strong></p><p>${p.descripcion || '—'}</p>
                 <p><strong>Fecha entrega:</strong></p><p>${App.formatDate(p.fecha_entrega)} ${p.hora_entrega || ''}</p>
                 <p><strong>Estado:</strong></p><p><span class="status-badge status-${p.estado}">${App.statusLabel(p.estado)}</span></p>
@@ -164,7 +151,7 @@ Pages.pedidos = {
             ${p.notas ? `<p style="margin-top:.8rem;font-size:.85rem;"><strong>Notas:</strong> ${p.notas}</p>` : ''}
         `, `
             ${p.estado === 'en_preparacion' ? `<button class="btn btn-primary" onclick="Pages.pedidos.cambiarEstado(${p.id},'listo');App.closeModal();">Marcar como listo</button>` : ''}
-            ${p.estado === 'en_preparacion' ? `<button class="btn btn-danger" onclick="if(confirm('¿Estás seguro de cancelar este pedido?')){ Pages.pedidos.cambiarEstado(${p.id},'cancelado'); App.closeModal(); }">Cancelar pedido</button>` : ''}
+            ${p.estado === 'en_preparacion' ? `<button class="btn btn-danger" onclick="if(confirm('¿Cancelar este pedido?')){ Pages.pedidos.cambiarEstado(${p.id},'cancelado'); App.closeModal(); }">Cancelar pedido</button>` : ''}
             ${p.estado === 'listo' ? `<button class="btn btn-success" onclick="Pages.pedidos.cambiarEstado(${p.id},'entregado');App.closeModal();">Marcar entregado</button>` : ''}
             <button class="btn btn-outline" onclick="App.closeModal()">Cerrar</button>
         `);
@@ -173,16 +160,10 @@ Pages.pedidos = {
     cambiarEstado(id, estado) {
         DB.run("UPDATE pedidos SET estado = ? WHERE id = ?", [estado, id]);
         
-        // Sincronizar estado de la cotización asociada
         if (estado === 'entregado') {
             const p = DB.getOne("SELECT * FROM pedidos WHERE id = ?", [id]);
-            if (p) {
-                if (p.cotizacion_id) {
-                    DB.run("UPDATE cotizaciones SET estado = 'enviada' WHERE id = ?", [p.cotizacion_id]);
-                } else if (p.cliente_nombre) {
-                    // Fallback: buscar cotización aceptada del mismo cliente con el mismo total
-                    DB.run("UPDATE cotizaciones SET estado = 'enviada' WHERE cliente_nombre = ? AND total = ? AND estado = 'aceptada'", [p.cliente_nombre, p.total]);
-                }
+            if (p && p.cotizacion_id) {
+                DB.run("UPDATE cotizaciones SET estado = 'enviada' WHERE id = ?", [p.cotizacion_id]);
             }
         }
         
@@ -195,6 +176,41 @@ Pages.pedidos = {
             DB.run("DELETE FROM pedidos WHERE id = ?", [id]);
             App.showToast('Pedido eliminado', 'success');
             App.navigateTo('pedidos');
+        }
+    },
+
+    // Modal para pedir fecha al convertir cotización en pedido (llamado desde nueva-cotizacion.js)
+    pedirFechaYCrear(datosCallback) {
+        const hoy = new Date();
+        const defFecha = new Date(hoy);
+        defFecha.setDate(hoy.getDate() + 2);
+        const defStr = defFecha.toISOString().split('T')[0];
+
+        App.showModal('Fecha de entrega del pedido',
+            `<div class="form-group">
+                <label class="form-label">Fecha de entrega *</label>
+                <input type="date" id="ped-fecha" class="form-input" value="${defStr}" min="${hoy.toISOString().split('T')[0]}">
+            </div>
+            <div class="form-group">
+                <label class="form-label">Hora de entrega</label>
+                <input type="time" id="ped-hora" class="form-input" value="12:00">
+            </div>`,
+            `<button class="btn btn-outline" onclick="App.closeModal()">Cancelar</button>
+             <button class="btn btn-primary" onclick="Pages.pedidos._confirmarFecha()">Confirmar pedido</button>`
+        );
+        this._pendingCallback = datosCallback;
+    },
+
+    _pendingCallback: null,
+
+    _confirmarFecha() {
+        const fecha = document.getElementById('ped-fecha').value;
+        const hora = document.getElementById('ped-hora').value || '12:00';
+        if (!fecha) { App.showToast('La fecha de entrega es requerida', 'error'); return; }
+        App.closeModal();
+        if (Pages.pedidos._pendingCallback) {
+            Pages.pedidos._pendingCallback(fecha, hora);
+            Pages.pedidos._pendingCallback = null;
         }
     }
 };
