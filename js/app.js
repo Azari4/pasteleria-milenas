@@ -200,7 +200,6 @@ const App = {
             'cotizaciones': 'Cotizaciones',
             'pedidos': 'Pedidos',
             'clientes': 'Clientes',
-            'catalogo': 'Catálogo',
             'reportes': 'Reportes',
             'usuarios': 'Gestión de Usuarios',
             'configuracion': 'Configuración'
@@ -213,7 +212,6 @@ const App = {
             'cotizaciones': 'cotizaciones',
             'pedidos': 'pedidos',
             'clientes': 'clientes',
-            'catalogo': 'catalogo',
             'reportes': 'reportes',
             'usuarios': 'usuarios',
             'configuracion': 'configuracion'
@@ -222,7 +220,7 @@ const App = {
         const pageKey = pageKeys[page];
         
         // Authorization check
-        const adminPages = ['catalogo', 'reportes', 'usuarios', 'configuracion'];
+        const adminPages = ['reportes', 'usuarios', 'configuracion'];
         if (adminPages.includes(page) && this.currentUser && this.currentUser.rol !== 'admin') {
             this.showToast('No tienes permiso para acceder a esta página', 'error');
             this.navigateTo('nueva-cotizacion');

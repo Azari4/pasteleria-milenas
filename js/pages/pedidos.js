@@ -173,10 +173,16 @@ Pages.pedidos = {
     cambiarEstado(id, estado) {
         DB.run("UPDATE pedidos SET estado = ? WHERE id = ?", [estado, id]);
         
+        // Sincronizar estado de la cotización asociada
         if (estado === 'entregado') {
-            const p = DB.getOne("SELECT cotizacion_id FROM pedidos WHERE id = ?", [id]);
-            if (p && p.cotizacion_id) {
-                DB.run("UPDATE cotizaciones SET estado = 'enviada' WHERE id = ?", [p.cotizacion_id]);
+            const p = DB.getOne("SELECT * FROM pedidos WHERE id = ?", [id]);
+            if (p) {
+                if (p.cotizacion_id) {
+                    DB.run("UPDATE cotizaciones SET estado = 'enviada' WHERE id = ?", [p.cotizacion_id]);
+                } else if (p.cliente_nombre) {
+                    // Fallback: buscar cotización aceptada del mismo cliente con el mismo total
+                    DB.run("UPDATE cotizaciones SET estado = 'enviada' WHERE cliente_nombre = ? AND total = ? AND estado = 'aceptada'", [p.cliente_nombre, p.total]);
+                }
             }
         }
         

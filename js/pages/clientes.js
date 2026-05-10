@@ -39,9 +39,9 @@ Pages.clientes = {
 
     renderCard(c) {
         const initials = c.nombre.split(' ').map(n=>n[0]).slice(0,2).join('').toUpperCase();
-        const cotCount = DB.getOne("SELECT COUNT(*) as cnt FROM cotizaciones WHERE cliente_id=?",[c.id])?.cnt||0;
+        const cotCount = DB.getOne("SELECT COUNT(*) as cnt FROM cotizaciones WHERE cliente_id=? AND estado IN ('pendiente','enviada')",[c.id])?.cnt||0;
         const pedCount = DB.getOne("SELECT COUNT(*) as cnt FROM pedidos WHERE cliente_id=?",[c.id])?.cnt||0;
-        const totalG = DB.getOne("SELECT COALESCE(SUM(total),0) as t FROM cotizaciones WHERE cliente_id=? AND estado='aceptada'",[c.id])?.t||0;
+        const totalG = DB.getOne("SELECT COALESCE(SUM(total),0) as t FROM pedidos WHERE cliente_id=?",[c.id])?.t||0;
         return `<div class="client-card">
             <div class="client-card-header">
                 <div class="client-avatar">${initials}</div>
