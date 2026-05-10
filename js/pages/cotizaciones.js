@@ -161,7 +161,7 @@ Pages.cotizaciones = {
         try { extras = JSON.parse(c.extras || '[]'); } catch(e) {}
         
         const extrasHTML = extras.length > 0 
-            ? `<h4 style="margin-top:.8rem;font-size:.9rem;">Extras:</h4><ul style="padding-left:1rem;">${extras.map(e => `<li style="font-size:.85rem;">${e.nombre} — Q.${Number(e.precio).toFixed(2)}</li>`).join('')}</ul>` 
+            ? `<h4 style="margin-top:.8rem;font-size:.9rem;">Extras:</h4><ul style="padding-left:1rem;">${extras.map(e => `<li style="font-size:.85rem;">${e.nombre} — ${App.formatCurrency(e.precio)}</li>`).join('')}</ul>` 
             : '';
         
         App.showModal(`Cotización ${c.numero}`, `

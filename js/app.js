@@ -295,7 +295,8 @@ const App = {
 
     // Format currency
     formatCurrency(amount) {
-        return `Q.${Number(amount).toFixed(2)}`;
+        const symbol = DB.getConfig('moneda_simbolo') || 'Q.';
+        return `${symbol}${Number(amount).toFixed(2)}`;
     },
 
     // Format date

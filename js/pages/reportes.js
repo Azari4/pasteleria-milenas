@@ -129,7 +129,7 @@ Pages.reportes = {
             type:'bar',
             data:{
                 labels:topClients.map(c=>c.cliente_nombre),
-                datasets:[{label:'Ingresos (Q.)',data:topClients.map(c=>c.total),backgroundColor:[pink,purple,green,orange,blue],borderRadius:8,borderSkipped:false}]
+                datasets:[{label:`Ingresos (${DB.getConfig('moneda_simbolo')||'Q.'})`,data:topClients.map(c=>c.total),backgroundColor:[pink,purple,green,orange,blue],borderRadius:8,borderSkipped:false}]
             },
             options:{indexAxis:'y',responsive:true,plugins:{legend:{display:false}},scales:{x:{beginAtZero:true,grid:{display:false}}}}
         });

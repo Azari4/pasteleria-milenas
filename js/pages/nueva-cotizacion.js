@@ -142,7 +142,7 @@ Pages.nuevaCotizacion = {
                 <div class="size-cake" style="font-size:${1.5 + (sizeNum/50)*1.2}rem">${s.emoji || '🎂'}</div>
                 <div class="size-portions">${sizeNum}</div>
                 <div class="size-label">porciones</div>
-                <div class="size-price">Q.${s.precio.toFixed(2)}</div>
+                <div class="size-price">${App.formatCurrency(s.precio)}</div>
             </div>
             `;
         }).join('');
@@ -156,7 +156,7 @@ Pages.nuevaCotizacion = {
             <button class="flavor-btn ${this.state.sabor === f.nombre ? 'selected' : ''}"
                     data-flavor="${f.nombre}" data-price="${f.precio}">
                 ${f.nombre}
-                ${f.precio > 0 ? `<span class="extra-price">+ Q.${f.precio.toFixed(2)}</span>` : ''}
+                ${f.precio > 0 ? `<span class="extra-price">+ ${App.formatCurrency(f.precio)}</span>` : ''}
             </button>
         `).join('');
     },
@@ -166,7 +166,7 @@ Pages.nuevaCotizacion = {
         if(items.length === 0) return '<p class="text-muted">No hay diseños configurados.</p>';
 
         return items.map(d => {
-            const label = d.precio === 0 ? 'Incluido' : `+ Q.${d.precio.toFixed(2)}`;
+            const label = d.precio === 0 ? 'Incluido' : `+ ${App.formatCurrency(d.precio)}`;
             return `
             <div class="design-card ${this.state.diseno === d.nombre ? 'selected' : ''}"
                  data-design="${d.nombre}" data-price="${d.precio}">
@@ -189,7 +189,7 @@ Pages.nuevaCotizacion = {
                            data-extra-name="${item.nombre}" data-extra-price="${item.precio}">
                     <span class="checkbox-mark"></span>
                     <span class="checkbox-label">${item.nombre}</span>
-                    <span class="checkbox-price">+ Q.${Number(item.precio).toFixed(2)}</span>
+                    <span class="checkbox-price">+ ${App.formatCurrency(item.precio)}</span>
                 </label>
             `;
         }).join('');
@@ -202,7 +202,7 @@ Pages.nuevaCotizacion = {
             <div class="summary-extras">
                 <div class="extras-title">Extras:</div>
                 <ul>
-                    ${s.extras.map(e => `<li><span>${e.nombre}</span><span>Q.${Number(e.precio).toFixed(2)}</span></li>`).join('')}
+                    ${s.extras.map(e => `<li><span>${e.nombre}</span><span>${App.formatCurrency(e.precio)}</span></li>`).join('')}
                 </ul>
             </div>
         ` : '';
@@ -214,7 +214,7 @@ Pages.nuevaCotizacion = {
             </div>
             <div class="summary-line">
                 <span class="label"></span>
-                <span class="value">Q.${s.precioTamano.toFixed(2)}</span>
+                <span class="value">${App.formatCurrency(s.precioTamano)}</span>
             </div>
             <div class="summary-line">
                 <span class="label">Sabor:</span>
@@ -222,7 +222,7 @@ Pages.nuevaCotizacion = {
             </div>
             <div class="summary-line">
                 <span class="label"></span>
-                <span class="value">Q.${s.precioSabor.toFixed(2)}</span>
+                <span class="value">${App.formatCurrency(s.precioSabor)}</span>
             </div>
             <div class="summary-line">
                 <span class="label">Diseño:</span>
@@ -230,12 +230,12 @@ Pages.nuevaCotizacion = {
             </div>
             <div class="summary-line">
                 <span class="label"></span>
-                <span class="value">Q.${s.precioDiseno.toFixed(2)}</span>
+                <span class="value">${App.formatCurrency(s.precioDiseno)}</span>
             </div>
             ${extrasHTML}
             <div class="summary-total">
                 <span class="label">Total</span>
-                <span class="value">Q.${total.toFixed(2)}</span>
+                <span class="value">${App.formatCurrency(total)}</span>
             </div>
             <div class="summary-divider"></div>
             <div class="summary-client">
@@ -438,19 +438,19 @@ Pages.nuevaCotizacion = {
         
         let msg = `${config}\n\n`;
         msg += `🎂 *Cotización Milena's Pastelería*\n\n`;
-        msg += `📐 Tamaño: ${s.tamano} porciones - Q.${s.precioTamano.toFixed(2)}\n`;
+        msg += `📐 Tamaño: ${s.tamano} porciones - ${App.formatCurrency(s.precioTamano)}\n`;
         msg += `🍰 Sabor: ${s.sabor}`;
-        if (s.precioSabor > 0) msg += ` - Q.${s.precioSabor.toFixed(2)}`;
+        if (s.precioSabor > 0) msg += ` - ${App.formatCurrency(s.precioSabor)}`;
         msg += `\n`;
         msg += `🎨 Diseño: ${s.diseno}`;
-        if (s.precioDiseno > 0) msg += ` - Q.${s.precioDiseno.toFixed(2)}`;
+        if (s.precioDiseno > 0) msg += ` - ${App.formatCurrency(s.precioDiseno)}`;
         msg += `\n`;
         
         if (s.extras.length > 0) {
             msg += `\n✨ Extras:\n`;
-            s.extras.forEach(e => { msg += `  • ${e.nombre} - Q.${e.precio.toFixed(2)}\n`; });
+            s.extras.forEach(e => { msg += `  • ${e.nombre} - ${App.formatCurrency(e.precio)}\n`; });
         }
-        msg += `\n💰 *Total: Q.${total.toFixed(2)}*`;
+        msg += `\n💰 *Total: ${App.formatCurrency(total)}*`;
         
         if (s.observaciones) msg += `\n\n📝 Nota: ${s.observaciones}`;
 
