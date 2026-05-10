@@ -15,7 +15,8 @@ Pages.nuevaCotizacion = {
         observaciones: '',
         clienteNombre: '',
         clienteDni: '',
-        clienteWhatsapp: ''
+        clienteWhatsapp: '',
+        guardarCliente: true
     },
 
     render() {
@@ -253,6 +254,11 @@ Pages.nuevaCotizacion = {
                     <input type="text" id="cot-cliente-whatsapp" placeholder="WhatsApp" value="${s.clienteWhatsapp}">
                 </div>
                 <p id="cot-cliente-found" style="font-size:.78rem; color:var(--success); display:none; margin-top:.3rem;"></p>
+                <label class="checkbox-item" style="margin-top:.8rem; display:flex;">
+                    <input type="checkbox" id="cot-save-client" ${s.guardarCliente ? 'checked' : ''}>
+                    <span class="checkbox-mark"></span>
+                    <span class="checkbox-label" style="font-size:.85rem;">Guardar datos como cliente nuevo en el sistema</span>
+                </label>
             </div>
         `;
     },
@@ -302,6 +308,10 @@ Pages.nuevaCotizacion = {
         if (wpInput) {
             wpInput.addEventListener('input', (e) => { this.state.clienteWhatsapp = e.target.value; });
         }
+        const saveCb = document.getElementById('cot-save-client');
+        if (saveCb) {
+            saveCb.addEventListener('change', (e) => { this.state.guardarCliente = e.target.checked; });
+        }
     },
 
     init() {
@@ -319,7 +329,7 @@ Pages.nuevaCotizacion = {
             diseno: firstDesign ? firstDesign.nombre : 'Básico',
             precioDiseno: firstDesign ? firstDesign.precio : 0,
             extras: [], observaciones: '',
-            clienteNombre: '', clienteDni: '', clienteWhatsapp: ''
+            clienteNombre: '', clienteDni: '', clienteWhatsapp: '', guardarCliente: true
         };
 
         // Size cards
@@ -403,7 +413,7 @@ Pages.nuevaCotizacion = {
             const existing = DB.getOne("SELECT id FROM clientes WHERE dni = ?", [s.clienteDni]);
             if (existing) {
                 clienteId = existing.id;
-            } else if (s.clienteNombre.trim()) {
+            } else if (s.clienteNombre.trim() && s.guardarCliente) {
                 DB.run("INSERT INTO clientes (nombre, dni, whatsapp) VALUES (?,?,?)", 
                     [s.clienteNombre, s.clienteDni, s.clienteWhatsapp]);
                 clienteId = DB.getOne("SELECT last_insert_rowid() as id").id;
@@ -412,7 +422,7 @@ Pages.nuevaCotizacion = {
             const existing = DB.getOne("SELECT id FROM clientes WHERE nombre = ?", [s.clienteNombre]);
             if (existing) {
                 clienteId = existing.id;
-            } else if (s.clienteNombre.trim()) {
+            } else if (s.clienteNombre.trim() && s.guardarCliente) {
                 DB.run("INSERT INTO clientes (nombre, whatsapp) VALUES (?,?)", 
                     [s.clienteNombre, s.clienteWhatsapp]);
                 clienteId = DB.getOne("SELECT last_insert_rowid() as id").id;
@@ -479,7 +489,7 @@ Pages.nuevaCotizacion = {
             const exists = DB.getOne("SELECT id FROM clientes WHERE dni = ?", [s.clienteDni]);
             if (exists) {
                 clienteId = exists.id;
-            } else if (s.clienteNombre.trim()) {
+            } else if (s.clienteNombre.trim() && s.guardarCliente) {
                 DB.run("INSERT INTO clientes (nombre, dni, whatsapp) VALUES (?,?,?)", [s.clienteNombre, s.clienteDni, s.clienteWhatsapp]);
                 clienteId = DB.getOne("SELECT last_insert_rowid() as id").id;
             }
@@ -487,7 +497,7 @@ Pages.nuevaCotizacion = {
             const exists = DB.getOne("SELECT id FROM clientes WHERE whatsapp = ?", [s.clienteWhatsapp]);
             if (exists) {
                 clienteId = exists.id;
-            } else {
+            } else if (s.guardarCliente) {
                 DB.run("INSERT INTO clientes (nombre, whatsapp) VALUES (?,?)", [s.clienteNombre, s.clienteWhatsapp]);
                 clienteId = DB.getOne("SELECT last_insert_rowid() as id").id;
             }
@@ -520,11 +530,12 @@ Pages.nuevaCotizacion = {
 
         App.showToast('Cotización guardada y pedido creado en Preparación', 'success');
         
+        this.resetStateOnly();
         // Navigate to pedidos
         setTimeout(() => { window.location.hash = 'pedidos'; }, 500);
     },
 
-    resetForm() {
+    resetStateOnly() {
         const firstSize = DB.getOne("SELECT * FROM catalogo WHERE categoria='tamano' AND activo=1 ORDER BY precio ASC");
         const firstFlavor = DB.getOne("SELECT * FROM catalogo WHERE categoria='sabor' AND activo=1 ORDER BY precio ASC");
         const firstDesign = DB.getOne("SELECT * FROM catalogo WHERE categoria='diseno' AND activo=1 ORDER BY precio ASC");
@@ -537,8 +548,12 @@ Pages.nuevaCotizacion = {
             diseno: firstDesign ? firstDesign.nombre : 'Básico',
             precioDiseno: firstDesign ? firstDesign.precio : 0,
             extras: [], observaciones: '',
-            clienteNombre: '', clienteDni: '', clienteWhatsapp: ''
+            clienteNombre: '', clienteDni: '', clienteWhatsapp: '', guardarCliente: true
         };
+    },
+
+    resetForm() {
+        this.resetStateOnly();
         // Re-render
         App.navigateTo('nueva-cotizacion');
     }

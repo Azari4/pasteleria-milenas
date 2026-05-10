@@ -93,7 +93,10 @@ Pages.cotizaciones = {
         return cotizaciones.map(c => `
             <tr>
                 <td><strong>${c.numero}</strong></td>
-                <td>${c.cliente_nombre || '—'}</td>
+                <td>
+                    ${c.cliente_nombre || '—'}
+                    ${c.dni ? `<br><small class="text-muted" style="font-size:0.75rem">DNI: ${c.dni}</small>` : ''}
+                </td>
                 <td>${c.tamano} porc.</td>
                 <td>${c.sabor}</td>
                 <td>${c.diseno}</td>
@@ -132,9 +135,9 @@ Pages.cotizaciones = {
     getCotizaciones(filter) {
         const f = filter || this.currentFilter;
         if (f === 'todas') {
-            return DB.getAll("SELECT * FROM cotizaciones ORDER BY created_at DESC");
+            return DB.getAll("SELECT c.*, cl.dni FROM cotizaciones c LEFT JOIN clientes cl ON c.cliente_id = cl.id ORDER BY c.created_at DESC");
         }
-        return DB.getAll("SELECT * FROM cotizaciones WHERE estado = ? ORDER BY created_at DESC", [f]);
+        return DB.getAll("SELECT c.*, cl.dni FROM cotizaciones c LEFT JOIN clientes cl ON c.cliente_id = cl.id WHERE c.estado = ? ORDER BY c.created_at DESC", [f]);
     },
 
     init() {

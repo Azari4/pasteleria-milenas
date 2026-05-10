@@ -200,8 +200,8 @@ const App = {
             'cotizaciones': 'Cotizaciones',
             'pedidos': 'Pedidos',
             'clientes': 'Clientes',
+            'clientes': 'Clientes',
             'reportes': 'Reportes',
-            'usuarios': 'Gestión de Usuarios',
             'configuracion': 'Configuración'
         };
         document.getElementById('page-title').textContent = titles[page] || "Milena's";
@@ -212,15 +212,15 @@ const App = {
             'cotizaciones': 'cotizaciones',
             'pedidos': 'pedidos',
             'clientes': 'clientes',
+            'clientes': 'clientes',
             'reportes': 'reportes',
-            'usuarios': 'usuarios',
             'configuracion': 'configuracion'
         };
 
         const pageKey = pageKeys[page];
         
         // Authorization check
-        const adminPages = ['reportes', 'usuarios', 'configuracion'];
+        const adminPages = ['reportes', 'configuracion'];
         if (adminPages.includes(page) && this.currentUser && this.currentUser.rol !== 'admin') {
             this.showToast('No tienes permiso para acceder a esta página', 'error');
             this.navigateTo('nueva-cotizacion');

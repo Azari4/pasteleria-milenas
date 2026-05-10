@@ -39,7 +39,7 @@ Pages.clientes = {
 
     renderCard(c) {
         const initials = c.nombre.split(' ').map(n=>n[0]).slice(0,2).join('').toUpperCase();
-        const cotCount = DB.getOne("SELECT COUNT(*) as cnt FROM cotizaciones WHERE cliente_id=? AND estado IN ('pendiente','enviada')",[c.id])?.cnt||0;
+        const cotCount = DB.getOne("SELECT COUNT(*) as cnt FROM cotizaciones WHERE cliente_id=?",[c.id])?.cnt||0;
         const pedCount = DB.getOne("SELECT COUNT(*) as cnt FROM pedidos WHERE cliente_id=?",[c.id])?.cnt||0;
         const totalG = DB.getOne("SELECT COALESCE(SUM(total),0) as t FROM pedidos WHERE cliente_id=?",[c.id])?.t||0;
         return `<div class="client-card">
@@ -124,13 +124,13 @@ Pages.clientes = {
         if(!c) return;
 
         const pedidos = DB.getAll("SELECT * FROM pedidos WHERE cliente_id=? ORDER BY created_at DESC", [id]);
-        const cotizaciones = DB.getAll("SELECT * FROM cotizaciones WHERE cliente_id=? AND estado='pendiente' ORDER BY created_at DESC", [id]);
+        const cotizaciones = DB.getAll("SELECT * FROM cotizaciones WHERE cliente_id=? ORDER BY created_at DESC", [id]);
         
         let html = `<div style="max-height: 60vh; overflow-y: auto;">`;
         
-        html += `<h4 style="margin-bottom:.5rem; color:var(--primary); font-size:1rem;"><i data-lucide="file-text" style="width:16px;height:16px;display:inline-block;vertical-align:text-bottom;"></i> Cotizaciones Pendientes</h4>`;
+        html += `<h4 style="margin-bottom:.5rem; color:var(--primary); font-size:1rem;"><i data-lucide="file-text" style="width:16px;height:16px;display:inline-block;vertical-align:text-bottom;"></i> Historial de Cotizaciones</h4>`;
         if (cotizaciones.length === 0) {
-            html += `<p class="text-muted" style="font-size:.85rem; margin-bottom:1.5rem;">No hay cotizaciones pendientes.</p>`;
+            html += `<p class="text-muted" style="font-size:.85rem; margin-bottom:1.5rem;">No hay cotizaciones registradas.</p>`;
         } else {
             html += `<table class="data-table" style="font-size: .85rem; margin-bottom:1.5rem;">
                 <thead>
@@ -148,7 +148,7 @@ Pages.clientes = {
                         <td><strong>${cot.numero}</strong></td>
                         <td>${cot.tamano} porc. - ${cot.sabor}</td>
                         <td>${App.formatCurrency(cot.total)}</td>
-                        <td>${App.formatDate(cot.created_at)}</td>
+                        <td>${App.formatDate(cot.created_at)}<br><span class="status-badge status-${cot.estado}" style="font-size:0.7rem;padding:0.1rem 0.4rem;">${App.statusLabel(cot.estado)}</span></td>
                     </tr>
                 `;
             });

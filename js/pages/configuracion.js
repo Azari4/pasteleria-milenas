@@ -24,6 +24,7 @@ Pages.configuracion = {
             <nav class="config-nav">
                 <div class="config-nav-item active" data-section="negocio"><i data-lucide="building"></i> Negocio</div>
                 <div class="config-nav-item" data-section="catalogo"><i data-lucide="cake"></i> Catálogo</div>
+                <div class="config-nav-item" data-section="usuarios"><i data-lucide="users"></i> Usuarios</div>
                 <div class="config-nav-item" data-section="whatsapp"><i data-lucide="message-circle"></i> WhatsApp</div>
                 <div class="config-nav-item" data-section="sistema"><i data-lucide="sliders"></i> Sistema</div>
             </nav>
@@ -54,6 +55,33 @@ Pages.configuracion = {
                     </div>
                     <div class="catalog-grid" id="catalog-grid">
                         ${this.renderProducts(this.currentTab)}
+                    </div>
+                </div>
+
+                <!-- Usuarios -->
+                <div class="config-section" id="sec-usuarios" style="display:none;">
+                    <div class="page-toolbar" style="margin-bottom: 1rem; padding-bottom: 0; border: none;">
+                        <div class="toolbar-left"><h3 style="margin:0;"><i data-lucide="users"></i> Gestión de Usuarios</h3></div>
+                        <div class="toolbar-right">
+                            <button class="btn btn-primary btn-sm" id="btn-new-user"><i data-lucide="plus"></i> Nuevo Usuario</button>
+                        </div>
+                    </div>
+                    <div class="card">
+                        <div class="card-body" style="padding:0;overflow-x:auto;">
+                            <table class="data-table" id="users-table">
+                                <thead>
+                                    <tr>
+                                        <th>Nombre</th>
+                                        <th>Usuario</th>
+                                        <th>Rol</th>
+                                        <th>Estado</th>
+                                        <th>Acciones</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="users-tbody">
+                                </tbody>
+                            </table>
+                        </div>
                     </div>
                 </div>
 
@@ -120,6 +148,10 @@ Pages.configuracion = {
     },
 
     init() {
+        // Init users
+        this.loadUsers();
+        document.getElementById('btn-new-user').addEventListener('click', () => this.showUserModal());
+
         // Nav items
         document.querySelectorAll('.config-nav-item').forEach(item=>{
             item.addEventListener('click',()=>{
@@ -251,5 +283,122 @@ Pages.configuracion = {
     refreshCatalogGrid() {
         document.getElementById('catalog-grid').innerHTML = this.renderProducts(this.currentTab);
         if(window.lucide) lucide.createIcons();
+    },
+
+    loadUsers() {
+        const users = DB.getAll("SELECT * FROM usuarios ORDER BY id DESC");
+        const tbody = document.getElementById('users-tbody');
+        if (!tbody) return;
+        
+        if (users.length === 0) {
+            tbody.innerHTML = `<tr><td colspan="5" class="text-center text-muted py-3">No hay usuarios registrados</td></tr>`;
+            return;
+        }
+
+        tbody.innerHTML = users.map(u => `
+            <tr>
+                <td class="fw-bold">${u.nombre}</td>
+                <td>${u.usuario}</td>
+                <td>
+                    <span class="status-badge" style="background:var(--purple-mid);color:white;">
+                        ${u.rol.toUpperCase()}
+                    </span>
+                </td>
+                <td>
+                    <span class="status-badge status-${u.activo ? 'activo' : 'inactivo'}">
+                        ${u.activo ? 'Activo' : 'Inactivo'}
+                    </span>
+                </td>
+                <td>
+                    <div class="actions">
+                        <button class="btn btn-outline btn-icon" onclick="Pages.configuracion.showUserModal(${u.id})" title="Editar">
+                            <i data-lucide="edit-2"></i>
+                        </button>
+                        ${u.id !== App.currentUser.id ? `
+                        <button class="btn btn-outline btn-icon text-danger" onclick="Pages.configuracion.toggleStatus(${u.id}, ${u.activo})" title="${u.activo ? 'Desactivar' : 'Activar'}">
+                            <i data-lucide="power"></i>
+                        </button>
+                        ` : ''}
+                    </div>
+                </td>
+            </tr>
+        `).join('');
+        if(window.lucide) lucide.createIcons();
+    },
+
+    showUserModal(id = null) {
+        let u = { nombre: '', usuario: '', password: '', rol: 'vendedor' };
+        let isEdit = false;
+        if (id) {
+            u = DB.getOne("SELECT * FROM usuarios WHERE id = ?", [id]);
+            isEdit = true;
+        }
+
+        const body = `
+            <form id="user-form">
+                <input type="hidden" id="u-id" value="${id || ''}">
+                <div class="form-group">
+                    <label class="form-label">Nombre completo</label>
+                    <input type="text" id="u-nombre" class="form-input" required value="${u.nombre}">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Usuario de acceso</label>
+                    <input type="text" id="u-usuario" class="form-input" required value="${u.usuario}" ${isEdit ? 'readonly style="background:#f5f5f5;"' : ''}>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Contraseña</label>
+                    <input type="text" id="u-password" class="form-input" required value="${u.password}">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Rol</label>
+                    <select id="u-rol" class="form-select" required>
+                        <option value="admin" ${u.rol === 'admin' ? 'selected' : ''}>Administrador (Acceso total)</option>
+                        <option value="vendedor" ${u.rol === 'vendedor' ? 'selected' : ''}>Vendedor (Solo ventas)</option>
+                        <option value="decorador" ${u.rol === 'decorador' ? 'selected' : ''}>Decorador (Pedidos)</option>
+                        <option value="pastelero" ${u.rol === 'pastelero' ? 'selected' : ''}>Pastelero (Pedidos)</option>
+                    </select>
+                </div>
+            </form>
+        `;
+        const footer = `
+            <button class="btn btn-outline" onclick="App.closeModal()">Cancelar</button>
+            <button class="btn btn-primary" onclick="Pages.configuracion.saveUser()">Guardar</button>
+        `;
+        App.showModal(isEdit ? 'Editar Usuario' : 'Nuevo Usuario', body, footer);
+    },
+
+    saveUser() {
+        const id = document.getElementById('u-id').value;
+        const nombre = document.getElementById('u-nombre').value.trim();
+        const usuario = document.getElementById('u-usuario').value.trim();
+        const password = document.getElementById('u-password').value.trim();
+        const rol = document.getElementById('u-rol').value;
+
+        if (!nombre || !usuario || !password) {
+            App.showToast('Por favor completa todos los campos', 'error');
+            return;
+        }
+
+        if (id) {
+            DB.run("UPDATE usuarios SET nombre = ?, password = ?, rol = ? WHERE id = ?", [nombre, password, rol, id]);
+            App.showToast('Usuario actualizado', 'success');
+        } else {
+            const exists = DB.getOne("SELECT id FROM usuarios WHERE usuario = ?", [usuario]);
+            if (exists) {
+                App.showToast('Ese nombre de usuario ya existe', 'error');
+                return;
+            }
+            DB.run("INSERT INTO usuarios (nombre, usuario, password, rol) VALUES (?,?,?,?)", [nombre, usuario, password, rol]);
+            App.showToast('Usuario creado', 'success');
+        }
+        App.closeModal();
+        this.loadUsers();
+    },
+
+    toggleStatus(id, currentStatus) {
+        const newStatus = currentStatus ? 0 : 1;
+        DB.run("UPDATE usuarios SET activo = ? WHERE id = ?", [newStatus, id]);
+        App.showToast(`Usuario ${newStatus ? 'activado' : 'desactivado'}`, 'success');
+        this.loadUsers();
     }
 };
