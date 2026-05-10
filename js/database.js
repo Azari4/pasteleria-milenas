@@ -236,13 +236,19 @@ window.DB = {
         });
 
         // === PEDIDOS ===
+        const hoy = new Date();
+        const sumarDias = (dias) => {
+            const d = new Date(hoy);
+            d.setDate(d.getDate() + dias);
+            return d.toISOString().split('T')[0];
+        };
         const pedidos = [
-            ["PED-001", 1, 1, "María García López", "Pastel Vainilla 10 porc. - Básico - Cumpleaños Sofía", "2026-04-28", "14:00", "en_preparacion", 205, "Decorar con tema princesas", "2026-04-20 11:00:00"],
-            ["PED-002", 4, 5, "Valentina Castillo", "Pastel Tres Leches 30 porc. - Temático Cenicienta - XV años", "2026-04-27", "10:00", "en_preparacion", 455, "Incluye castillo de fondant", "2026-04-18 12:00:00"],
-            ["PED-003", 6, 6, "Diego Morales Pérez", "Pastel Chocolate 50 porc. - Personalizado - Graduación USAC", "2026-04-29", "16:00", "en_preparacion", 470, "Logo USAC en hoja de arroz", "2026-04-19 09:00:00"],
-            ["PED-004", 10, 3, "Ana Sofía López", "Pastel Tres Leches 20 porc. - Personalizado - Cumpleaños mamá", "2026-04-26", "12:00", "listo", 255, "", "2026-04-16 10:00:00"],
-            ["PED-005", 11, 5, "Valentina Castillo", "Pastel Marmoleado 15 porc. - Básico - Reunión", "2026-04-26", "09:00", "entregado", 160, "Entregado en Antigua", "2026-04-21 14:00:00"],
-            ["PED-006", null, 7, "Luisa Fernanda Ramírez", "Pastel Vainilla 20 porc. - Personalizado - Evento corporativo", "2026-04-30", "08:00", "en_preparacion", 235, "Necesita factura", "2026-04-24 11:00:00"]
+            ["PED-001", 1, 1, "María García López", "Pastel Vainilla 10 porc. - Básico - Cumpleaños Sofía", sumarDias(1), "14:00", "en_preparacion", 205, "Decorar con tema princesas", sumarDias(-5) + " 11:00:00"],
+            ["PED-002", 4, 5, "Valentina Castillo", "Pastel Tres Leches 30 porc. - Temático Cenicienta - XV años", sumarDias(2), "10:00", "en_preparacion", 455, "Incluye castillo de fondant", sumarDias(-4) + " 12:00:00"],
+            ["PED-003", 6, 6, "Diego Morales Pérez", "Pastel Chocolate 50 porc. - Personalizado - Graduación USAC", sumarDias(5), "16:00", "en_preparacion", 470, "Logo USAC en hoja de arroz", sumarDias(-3) + " 09:00:00"],
+            ["PED-004", 10, 3, "Ana Sofía López", "Pastel Tres Leches 20 porc. - Personalizado - Cumpleaños mamá", sumarDias(0), "12:00", "listo", 255, "", sumarDias(-6) + " 10:00:00"],
+            ["PED-005", 11, 5, "Valentina Castillo", "Pastel Marmoleado 15 porc. - Básico - Reunión", sumarDias(-1), "09:00", "entregado", 160, "Entregado en Antigua", sumarDias(-7) + " 14:00:00"],
+            ["PED-006", null, 7, "Luisa Fernanda Ramírez", "Pastel Vainilla 20 porc. - Personalizado - Evento corporativo", sumarDias(7), "08:00", "en_preparacion", 235, "Necesita factura", sumarDias(-2) + " 11:00:00"]
         ];
         pedidos.forEach(p => {
             this.db.run(

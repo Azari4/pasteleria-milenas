@@ -1,4 +1,4 @@
-﻿/* =============================================
+/* =============================================
    PAGE: Nueva Cotización
    ============================================= */
 window.Pages = window.Pages || {};
@@ -480,26 +480,26 @@ Pages.nuevaCotizacion = {
         const total = this.calcTotal();
         const config = DB.getConfig('whatsapp_mensaje') || "Hola! Tu cotizacion de Milena's Pasteleria:";
         
-        let msg = ${config}\n\n;
-        msg += --- Cotizacion de Milena's Pasteleria ---\n\n;
-        msg += Tamano: ${s.tamano} porciones - ${App.formatCurrency(s.precioTamano)}\n;
-        msg += Sabor: ${s.sabor};
-        if (s.precioSabor > 0) msg +=  - ${App.formatCurrency(s.precioSabor)};
-        msg += \n;
-        msg += Diseno: ${s.diseno};
-        if (s.precioDiseno > 0) msg +=  - ${App.formatCurrency(s.precioDiseno)};
-        msg += \n;
+        let msg = `${config}\n\n`;
+        msg += `--- Cotizacion de Milena's Pasteleria ---\n\n`;
+        msg += `Tamano: ${s.tamano} porciones - ${App.formatCurrency(s.precioTamano)}\n`;
+        msg += `Sabor: ${s.sabor}`;
+        if (s.precioSabor > 0) msg += ` - ${App.formatCurrency(s.precioSabor)}`;
+        msg += `\n`;
+        msg += `Diseno: ${s.diseno}`;
+        if (s.precioDiseno > 0) msg += ` - ${App.formatCurrency(s.precioDiseno)}`;
+        msg += `\n`;
         
         if (s.extras.length > 0) {
-            msg += \nExtras:\n;
-            s.extras.forEach(e => { msg +=   - ${e.nombre}: ${App.formatCurrency(e.precio)}\n; });
+            msg += `\nExtras:\n`;
+            s.extras.forEach(e => { msg += `  - ${e.nombre}: ${App.formatCurrency(e.precio)}\n`; });
         }
-        msg += \n*TOTAL: ${App.formatCurrency(total)}*;
+        msg += `\n*TOTAL: ${App.formatCurrency(total)}*`;
         
-        if (s.observaciones) msg += \n\nNota: ${s.observaciones};
+        if (s.observaciones) msg += `\n\nNota: ${s.observaciones}`;
 
         const phone = s.clienteWhatsapp || '';
-        const url = https://wa.me/${phone}?text=${encodeURIComponent(msg)};
+        const url = `https://wa.me/${phone}?text=${encodeURIComponent(msg)}`;
         window.open(url, '_blank');
         // El formulario queda intacto
     },
