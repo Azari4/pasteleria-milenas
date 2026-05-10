@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Milena's Pastelería — Sistema de Cotizaciones</title>
+    <meta name="description" content="Sistema de gestión de cotizaciones para Milena's Pastelería. Crea cotizaciones, gestiona pedidos y clientes.">
+    
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Dancing+Script:wght@600;700&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    
+    <!-- Styles -->
+    <link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+    <!-- Loading Screen -->
+    <div id="loading-screen" class="loading-screen">
+        <div class="loader">
+            <div class="loader-icon">🎂</div>
+            <div class="loader-bar"><div class="loader-fill"></div></div>
+            <p class="loader-text">Cargando Milena's...</p>
+        </div>
+    </div>
+    <!-- Login Screen -->
+    <div id="login-screen" class="login-screen" style="display:none;">
+        <div class="login-card">
+            <div class="login-header">
+                <img src="assets/logo.png" alt="Milena's" class="login-logo" onerror="this.style.display='none'; this.nextElementSibling.style.display='block';">
+                <span class="logo-icon-fallback" style="display:none; font-size:3rem;">🎂</span>
+                <h2>Iniciar Sesión</h2>
+                <p>Bienvenido al sistema de cotizaciones</p>
+            </div>
+            <form id="login-form">
+                <div class="form-group">
+                    <label for="login-usuario">Usuario</label>
+                    <input type="text" id="login-usuario" class="form-input" required placeholder="Ej: admin">
+                </div>
+                <div class="form-group">
+                    <label for="login-password">Contraseña</label>
+                    <input type="password" id="login-password" class="form-input" required placeholder="********">
+                </div>
+                <button type="submit" class="btn btn-primary btn-block">Ingresar</button>
+                <div id="login-error" class="login-error" style="display:none; color:red; margin-top:10px; text-align:center;">
+                    Usuario o contraseña incorrectos.
+                </div>
+            </form>
+        </div>
+    </div>
+    <!-- App Container -->
+    <div id="app" class="app-container" style="display:none;">
+        <!-- Sidebar -->
+        <aside id="sidebar" class="sidebar">
+            <div class="sidebar-logo">
+                <img src="assets/logo.png" alt="Milena's" class="logo-img" onerror="this.style.display='none'; this.nextElementSibling.querySelector('.logo-icon-fallback').style.display='flex';">
+                <div class="logo-text">
+                    <span class="logo-icon-fallback" style="display:none;">🎂</span>
+                    <span class="logo-name">Milena's</span>
+                    <span class="logo-subtitle">Pastelería</span>
+                </div>
+            </div>
+            
+            <nav class="sidebar-nav">
+                <a href="#nueva-cotizacion" class="nav-item active" data-page="nueva-cotizacion">
+                    <i data-lucide="plus-circle"></i>
+                    <span>Nueva cotización</span>
+                </a>
+                <a href="#cotizaciones" class="nav-item" data-page="cotizaciones">
+                    <i data-lucide="file-text"></i>
+                    <span>Cotizaciones</span>
+                </a>
+                <a href="#pedidos" class="nav-item" data-page="pedidos">
+                    <i data-lucide="shopping-bag"></i>
+                    <span>Pedidos</span>
+                </a>
+                <a href="#clientes" class="nav-item" data-page="clientes">
+                    <i data-lucide="users"></i>
+                    <span>Clientes</span>
+                </a>
+                <a href="#catalogo" class="nav-item" data-page="catalogo" data-role="admin">
+                    <i data-lucide="cake"></i>
+                    <span>Catálogo</span>
+                </a>
+                <a href="#reportes" class="nav-item" data-page="reportes" data-role="admin">
+                    <i data-lucide="bar-chart-3"></i>
+                    <span>Reportes</span>
+                </a>
+                <a href="#usuarios" class="nav-item" data-page="usuarios" data-role="admin">
+                    <i data-lucide="users-cog"></i>
+                    <span>Usuarios</span>
+                </a>
+                <a href="#configuracion" class="nav-item" data-page="configuracion" data-role="admin">
+                    <i data-lucide="settings"></i>
+                    <span>Configuración</span>
+                </a>
+            </nav>
+            
+            <div class="sidebar-footer">
+                <a href="#" class="nav-item" id="btn-logout">
+                    <i data-lucide="log-out"></i>
+                    <span>Cerrar sesión</span>
+                </a>
+            </div>
+        </aside>
+        
+        <!-- Main Content -->
+        <main class="main-wrapper">
+            <!-- Header -->
+            <header class="main-header">
+                <h1 id="page-title" class="header-title">Nueva cotización</h1>
+                <div class="header-actions">
+                    <div class="search-box">
+                        <i data-lucide="search"></i>
+                        <input type="text" id="search-input" placeholder="Buscar cliente...">
+                    </div>
+                    <button class="header-btn notification-btn" id="btn-notifications">
+                        <i data-lucide="bell"></i>
+                        <span class="badge">3</span>
+                    </button>
+                    <div class="user-info">
+                        <div class="user-avatar">AM</div>
+                        <div class="user-details">
+                            <span class="user-name" id="header-user-name">Ana Martínez</span>
+                            <span class="user-role" id="header-user-role">Vendedora</span>
+                        </div>
+                    </div>
+                </div>
+            </header>
+            
+            <!-- Dynamic Content -->
+            <div id="main-content" class="main-content">
+            </div>
+        </main>
+    </div>
+
+    <!-- Toast Container -->
+    <div id="toast-container" class="toast-container"></div>
+
+    <!-- Modal Overlay -->
+    <div id="modal-overlay" class="modal-overlay" style="display:none;">
+        <div id="modal-content" class="modal-content"></div>
+    </div>
+
+    <!-- Scripts (CDN) -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/sql.js/1.10.3/sql-wasm.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+    <script src="https://unpkg.com/lucide@0.294.0/dist/umd/lucide.js"></script>
+    
+    <!-- App Scripts -->
+    <script src="js/database.js"></script>
+    <script src="js/pages/nueva-cotizacion.js"></script>
+    <script src="js/pages/cotizaciones.js"></script>
+    <script src="js/pages/pedidos.js"></script>
+    <script src="js/pages/clientes.js"></script>
+    <script src="js/pages/catalogo.js"></script>
+    <script src="js/pages/reportes.js"></script>
+    <script src="js/pages/usuarios.js"></script>
+    <script src="js/pages/configuracion.js"></script>
+    <script src="js/app.js"></script>
+</body>
+</html>
