@@ -5,10 +5,13 @@ window.Pages = window.Pages || {};
 
 Pages.cotizaciones = {
     currentFilter: 'todas',
+    currentSort: 'fecha_desc',
+    searchQuery: '',
+    fechaInicio: '',
+    fechaFin: '',
 
     render() {
         const stats = this.getStats();
-        const cotizaciones = this.getCotizaciones();
 
         return `
         <!-- Stats Cards -->
@@ -43,21 +46,45 @@ Pages.cotizaciones = {
             </div>
         </div>
 
-        <!-- Toolbar -->
-        <div class="page-toolbar">
-            <div class="toolbar-left">
-                <div class="filter-pills">
-                    <button class="filter-pill active" data-filter="todas">Todas</button>
-                    <button class="filter-pill" data-filter="pendiente">Pendientes</button>
-                    <button class="filter-pill" data-filter="enviada">Enviadas</button>
-                    <button class="filter-pill" data-filter="aceptada">Aceptadas</button>
-                    <button class="filter-pill" data-filter="rechazada">Rechazadas</button>
+        <!-- Toolbar con filtros, búsqueda y ordenamiento -->
+        <div class="card" style="margin-bottom:1rem;">
+            <div class="card-body" style="padding:.8rem 1rem;">
+                <!-- Fila 1: Filtros de estado + Nueva -->
+                <div style="display:flex; align-items:center; gap:.5rem; flex-wrap:wrap; margin-bottom:.6rem;">
+                    <div class="filter-pills" style="flex:1; flex-wrap:wrap;">
+                        <button class="filter-pill ${this.currentFilter==='todas'?'active':''}" data-filter="todas">Todas</button>
+                        <button class="filter-pill ${this.currentFilter==='pendiente'?'active':''}" data-filter="pendiente">Pendientes</button>
+                        <button class="filter-pill ${this.currentFilter==='enviada'?'active':''}" data-filter="enviada">Enviadas</button>
+                        <button class="filter-pill ${this.currentFilter==='aceptada'?'active':''}" data-filter="aceptada">Aceptadas</button>
+                        <button class="filter-pill ${this.currentFilter==='rechazada'?'active':''}" data-filter="rechazada">Rechazadas</button>
+                    </div>
+                    <button class="btn btn-primary btn-sm" onclick="window.location.hash='nueva-cotizacion'">
+                        <i data-lucide="plus"></i> Nueva
+                    </button>
                 </div>
-            </div>
-            <div class="toolbar-right">
-                <button class="btn btn-primary btn-sm" onclick="window.location.hash='nueva-cotizacion'">
-                    <i data-lucide="plus"></i> Nueva
-                </button>
+                <!-- Fila 2: Búsqueda, fechas y ordenamiento -->
+                <div style="display:flex; align-items:center; gap:.5rem; flex-wrap:wrap;">
+                    <div style="position:relative; flex:1; min-width:160px;">
+                        <i data-lucide="search" style="position:absolute;left:.6rem;top:50%;transform:translateY(-50%);width:15px;height:15px;color:var(--text-light);pointer-events:none;"></i>
+                        <input type="text" id="cot-search" class="form-input" 
+                               style="padding-left:2rem; height:36px; font-size:.85rem;"
+                               placeholder="Buscar por nombre o DNI..." value="${this.searchQuery}">
+                    </div>
+                    <input type="date" id="cot-fecha-ini" class="form-input" 
+                           style="height:36px; font-size:.82rem; width:140px;" value="${this.fechaInicio}" title="Fecha desde">
+                    <input type="date" id="cot-fecha-fin" class="form-input" 
+                           style="height:36px; font-size:.82rem; width:140px;" value="${this.fechaFin}" title="Fecha hasta">
+                    <select id="cot-sort" class="form-input" style="height:36px; font-size:.82rem; width:160px;">
+                        <option value="fecha_desc" ${this.currentSort==='fecha_desc'?'selected':''}>📅 Más recientes</option>
+                        <option value="fecha_asc" ${this.currentSort==='fecha_asc'?'selected':''}>📅 Más antiguas</option>
+                        <option value="estado" ${this.currentSort==='estado'?'selected':''}>🏷 Por estado</option>
+                        <option value="total_desc" ${this.currentSort==='total_desc'?'selected':''}>💰 Mayor monto</option>
+                        <option value="total_asc" ${this.currentSort==='total_asc'?'selected':''}>💰 Menor monto</option>
+                    </select>
+                    <button class="btn btn-outline btn-sm" id="btn-clear-filters" title="Limpiar filtros">
+                        <i data-lucide="x"></i>
+                    </button>
+                </div>
             </div>
         </div>
 
@@ -69,6 +96,7 @@ Pages.cotizaciones = {
                         <tr>
                             <th>#</th>
                             <th>Cliente</th>
+                            <th>DNI</th>
                             <th>Tamaño</th>
                             <th>Sabor</th>
                             <th>Diseño</th>
@@ -79,7 +107,7 @@ Pages.cotizaciones = {
                         </tr>
                     </thead>
                     <tbody id="cotizaciones-tbody">
-                        ${this.renderRows(cotizaciones)}
+                        ${this.renderRows(this.getCotizaciones())}
                     </tbody>
                 </table>
             </div>
@@ -88,35 +116,38 @@ Pages.cotizaciones = {
 
     renderRows(cotizaciones) {
         if (cotizaciones.length === 0) {
-            return `<tr><td colspan="9" class="text-center text-muted" style="padding:2rem;">No se encontraron cotizaciones</td></tr>`;
+            return `<tr><td colspan="10" class="text-center text-muted" style="padding:2rem;">No se encontraron cotizaciones</td></tr>`;
         }
         return cotizaciones.map(c => `
             <tr>
                 <td><strong>${c.numero}</strong></td>
-                <td>
-                    ${c.cliente_nombre || '—'}
-                    ${c.dni ? `<br><small class="text-muted" style="font-size:0.75rem">DNI: ${c.dni}</small>` : ''}
-                </td>
+                <td>${c.cliente_nombre || '—'}</td>
+                <td style="font-size:.82rem; color:var(--text-medium);">${c.dni || '—'}</td>
                 <td>${c.tamano} porc.</td>
                 <td>${c.sabor}</td>
                 <td>${c.diseno}</td>
                 <td><strong>${App.formatCurrency(c.total)}</strong></td>
                 <td><span class="status-badge status-${c.estado}">${App.statusLabel(c.estado)}</span></td>
-                <td>${App.formatDate(c.created_at)}</td>
-                <td class="actions">
-                    <button class="btn btn-sm btn-outline btn-icon" title="Ver detalle" onclick="Pages.cotizaciones.verDetalle(${c.id})">
-                        <i data-lucide="eye"></i>
-                    </button>
-                    <button class="btn btn-sm btn-outline btn-icon" title="Eliminar" onclick="Pages.cotizaciones.eliminar(${c.id})">
-                        <i data-lucide="trash-2"></i>
-                    </button>
-                    ${c.estado !== 'aceptada' && c.estado !== 'rechazada' ? `
-                    <button class="btn btn-sm btn-primary btn-icon" title="Aceptar" onclick="Pages.cotizaciones.cambiarEstado(${c.id}, 'aceptada')">
-                        <i data-lucide="check"></i>
-                    </button>
-                    <button class="btn btn-sm btn-outline btn-icon text-danger" title="Rechazar" onclick="if(confirm('¿Marcar cotización como rechazada?')) Pages.cotizaciones.cambiarEstado(${c.id}, 'rechazada')">
-                        <i data-lucide="x"></i>
-                    </button>` : ''}
+                <td style="font-size:.82rem;">${App.formatDate(c.created_at)}</td>
+                <td>
+                    <div class="actions">
+                        <button class="btn btn-sm btn-outline btn-icon" title="Ver detalle" onclick="Pages.cotizaciones.verDetalle(${c.id})">
+                            <i data-lucide="eye"></i>
+                        </button>
+                        <button class="btn btn-sm btn-outline btn-icon" title="Editar" onclick="Pages.cotizaciones.editarCotizacion(${c.id})">
+                            <i data-lucide="edit-2"></i>
+                        </button>
+                        ${c.estado !== 'aceptada' && c.estado !== 'rechazada' ? `
+                        <button class="btn btn-sm btn-primary btn-icon" title="Aceptar" onclick="Pages.cotizaciones.cambiarEstado(${c.id}, 'aceptada')">
+                            <i data-lucide="check"></i>
+                        </button>
+                        <button class="btn btn-sm btn-outline btn-icon text-danger" title="Rechazar" onclick="if(confirm('¿Marcar cotización como rechazada?')) Pages.cotizaciones.cambiarEstado(${c.id}, 'rechazada')">
+                            <i data-lucide="x"></i>
+                        </button>` : ''}
+                        <button class="btn btn-sm btn-outline btn-icon text-danger" title="Eliminar" onclick="Pages.cotizaciones.eliminar(${c.id})">
+                            <i data-lucide="trash-2"></i>
+                        </button>
+                    </div>
                 </td>
             </tr>
         `).join('');
@@ -132,32 +163,142 @@ Pages.cotizaciones = {
         };
     },
 
-    getCotizaciones(filter) {
-        const f = filter || this.currentFilter;
-        if (f === 'todas') {
-            return DB.getAll("SELECT c.*, cl.dni FROM cotizaciones c LEFT JOIN clientes cl ON c.cliente_id = cl.id ORDER BY c.created_at DESC");
+    getCotizaciones() {
+        // Base query con JOIN para traer DNI
+        let sql = `SELECT c.*, cl.dni FROM cotizaciones c 
+                   LEFT JOIN clientes cl ON c.cliente_id = cl.id`;
+        const params = [];
+
+        if (this.currentFilter !== 'todas') {
+            sql += ` WHERE c.estado = ?`;
+            params.push(this.currentFilter);
         }
-        return DB.getAll("SELECT c.*, cl.dni FROM cotizaciones c LEFT JOIN clientes cl ON c.cliente_id = cl.id WHERE c.estado = ? ORDER BY c.created_at DESC", [f]);
+
+        // Orden base
+        const orderMap = {
+            'fecha_desc': 'c.created_at DESC',
+            'fecha_asc': 'c.created_at ASC',
+            'estado': 'c.estado ASC, c.created_at DESC',
+            'total_desc': 'c.total DESC',
+            'total_asc': 'c.total ASC'
+        };
+        sql += ` ORDER BY ${orderMap[this.currentSort] || 'c.created_at DESC'}`;
+
+        let rows = DB.getAll(sql, params);
+
+        // Filtro de búsqueda en memoria
+        const q = (this.searchQuery || '').toLowerCase().trim();
+        if (q) {
+            rows = rows.filter(r =>
+                (r.cliente_nombre || '').toLowerCase().includes(q) ||
+                (r.dni || '').toLowerCase().includes(q)
+            );
+        }
+
+        // Filtro por rango de fechas
+        if (this.fechaInicio) {
+            rows = rows.filter(r => r.created_at >= this.fechaInicio);
+        }
+        if (this.fechaFin) {
+            // Incluir todo el día final
+            rows = rows.filter(r => r.created_at.substring(0, 10) <= this.fechaFin);
+        }
+
+        return rows;
+    },
+
+    refreshTable() {
+        const tbody = document.getElementById('cotizaciones-tbody');
+        if (tbody) {
+            tbody.innerHTML = this.renderRows(this.getCotizaciones());
+            if (window.lucide) lucide.createIcons();
+        }
     },
 
     init() {
         this.currentFilter = 'todas';
+        this.currentSort = 'fecha_desc';
+        this.searchQuery = '';
+        this.fechaInicio = '';
+        this.fechaFin = '';
 
-        // Filter pills
+        // Filtros de estado
         document.querySelectorAll('.filter-pill').forEach(pill => {
             pill.addEventListener('click', () => {
                 document.querySelectorAll('.filter-pill').forEach(p => p.classList.remove('active'));
                 pill.classList.add('active');
                 this.currentFilter = pill.dataset.filter;
-                const tbody = document.getElementById('cotizaciones-tbody');
-                tbody.innerHTML = this.renderRows(this.getCotizaciones());
-                if (window.lucide) lucide.createIcons();
+                this.refreshTable();
             });
         });
+
+        // Búsqueda de texto
+        const searchInput = document.getElementById('cot-search');
+        if (searchInput) {
+            searchInput.addEventListener('input', (e) => {
+                this.searchQuery = e.target.value;
+                this.refreshTable();
+            });
+        }
+
+        // Fechas
+        const fechaIni = document.getElementById('cot-fecha-ini');
+        const fechaFin = document.getElementById('cot-fecha-fin');
+        if (fechaIni) fechaIni.addEventListener('change', (e) => { this.fechaInicio = e.target.value; this.refreshTable(); });
+        if (fechaFin) fechaFin.addEventListener('change', (e) => { this.fechaFin = e.target.value; this.refreshTable(); });
+
+        // Ordenamiento
+        const sortSel = document.getElementById('cot-sort');
+        if (sortSel) sortSel.addEventListener('change', (e) => { this.currentSort = e.target.value; this.refreshTable(); });
+
+        // Limpiar filtros
+        const btnClear = document.getElementById('btn-clear-filters');
+        if (btnClear) {
+            btnClear.addEventListener('click', () => {
+                this.searchQuery = '';
+                this.fechaInicio = '';
+                this.fechaFin = '';
+                this.currentFilter = 'todas';
+                this.currentSort = 'fecha_desc';
+                // Re-render la página completa para resetear visualmente los inputs
+                App.navigateTo('cotizaciones');
+            });
+        }
+    },
+
+    editarCotizacion(id) {
+        const c = DB.getOne("SELECT c.*, cl.dni, cl.whatsapp as cli_wp FROM cotizaciones c LEFT JOIN clientes cl ON c.cliente_id = cl.id WHERE c.id = ?", [id]);
+        if (!c) return;
+
+        let extras = [];
+        try { extras = JSON.parse(c.extras || '[]'); } catch(e) {}
+
+        // Buscar el precio de tamaño/sabor/diseño desde catálogo si no están en el registro
+        const tamanoItem = DB.getOne("SELECT precio FROM catalogo WHERE categoria='tamano' AND CAST(nombre AS INTEGER)=?", [c.tamano]);
+        const saborItem = DB.getOne("SELECT precio FROM catalogo WHERE categoria='sabor' AND nombre=?", [c.sabor]);
+        const disenoItem = DB.getOne("SELECT precio FROM catalogo WHERE categoria='diseno' AND nombre=?", [c.diseno]);
+
+        Pages.nuevaCotizacion.state = {
+            tamano: c.tamano,
+            precioTamano: c.precio_tamano || (tamanoItem ? tamanoItem.precio : 0),
+            sabor: c.sabor,
+            precioSabor: c.precio_sabor || (saborItem ? saborItem.precio : 0),
+            diseno: c.diseno,
+            precioDiseno: c.precio_diseno || (disenoItem ? disenoItem.precio : 0),
+            extras: extras,
+            observaciones: c.observaciones || '',
+            clienteNombre: c.cliente_nombre || '',
+            clienteDni: c.dni || '',
+            clienteWhatsapp: c.cli_wp || '',
+            guardarCliente: false,
+            editingId: c.id
+        };
+
+        App.navigateTo('nueva-cotizacion');
     },
 
     verDetalle(id) {
-        const c = DB.getOne("SELECT * FROM cotizaciones WHERE id = ?", [id]);
+        const c = DB.getOne("SELECT c.*, cl.dni FROM cotizaciones c LEFT JOIN clientes cl ON c.cliente_id = cl.id WHERE c.id = ?", [id]);
         if (!c) return;
         
         let extras = [];
@@ -170,6 +311,7 @@ Pages.cotizaciones = {
         App.showModal(`Cotización ${c.numero}`, `
             <div style="display:grid;grid-template-columns:1fr 1fr;gap:.5rem .8rem;font-size:.9rem;">
                 <p><strong>Cliente:</strong></p><p>${c.cliente_nombre || '—'}</p>
+                <p><strong>DNI:</strong></p><p>${c.dni || '—'}</p>
                 <p><strong>Tamaño:</strong></p><p>${c.tamano} porciones</p>
                 <p><strong>Sabor:</strong></p><p>${c.sabor}</p>
                 <p><strong>Diseño:</strong></p><p>${c.diseno}</p>
@@ -199,27 +341,23 @@ Pages.cotizaciones = {
         if (estado === 'aceptada') {
             const c = DB.getOne("SELECT * FROM cotizaciones WHERE id = ?", [id]);
             if (c) {
-                // Verificar si ya existe el pedido
-                const existe = DB.getOne("SELECT id FROM pedidos WHERE cotizacion_id = ?", [id]);
-                if (!existe) {
-                    const countPed = DB.getOne("SELECT COUNT(*) as c FROM pedidos").c + 1;
-                    const cNameSafe = (c.cliente_nombre || 'anonimo').toLowerCase().replace(/[^a-z0-9]/g, '-').replace(/-+/g, '-').substring(0, 15);
-                    const numeroPed = `PED-${String(countPed).padStart(3, '0')}-${cNameSafe}`;
-                    const desc = `Pastel ${c.sabor} ${c.tamano} porc. - ${c.diseno}`;
-                    const fecha = new Date();
-                    fecha.setDate(fecha.getDate() + 2);
-                    const fechaStr = fecha.toISOString().split('T')[0];
-                    
-                    DB.run(
-                        `INSERT INTO pedidos (numero, cotizacion_id, cliente_id, cliente_nombre, descripcion, fecha_entrega, hora_entrega, estado, total, notas)
-                         VALUES (?,?,?,?,?,?,?,?,?,?)`,
-                        [numeroPed, c.id, c.cliente_id, c.cliente_nombre, desc, fechaStr, '12:00', 'en_preparacion', c.total, c.observaciones]
-                    );
-                }
-            }
-        }
+                const count = DB.getOne("SELECT COUNT(*) as c FROM pedidos").c + 1;
+                const numeroPed = `PED-${String(count).padStart(3, '0')}`;
+                const desc = `Pastel ${c.sabor} ${c.tamano} porc. - ${c.diseno}`;
+                const fecha = new Date();
+                fecha.setDate(fecha.getDate() + 2);
+                const fechaStr = fecha.toISOString().split('T')[0];
 
-        App.showToast(`Estado actualizado a: ${App.statusLabel(estado)}`, 'success');
-        App.navigateTo('cotizaciones');
+                DB.run(
+                    `INSERT INTO pedidos (numero, cotizacion_id, cliente_id, cliente_nombre, descripcion, fecha_entrega, hora_entrega, estado, total, notas)
+                     VALUES (?,?,?,?,?,?,?,?,?,?)`,
+                    [numeroPed, c.id, c.cliente_id, c.cliente_nombre, desc, fechaStr, '12:00', 'en_preparacion', c.total, c.observaciones || '']
+                );
+                App.showToast(`Cotización aceptada y pedido ${numeroPed} creado`, 'success');
+            }
+        } else {
+            App.showToast(`Estado actualizado`, 'success');
+        }
+        this.refreshTable();
     }
 };

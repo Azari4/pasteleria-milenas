@@ -200,7 +200,6 @@ const App = {
             'cotizaciones': 'Cotizaciones',
             'pedidos': 'Pedidos',
             'clientes': 'Clientes',
-            'clientes': 'Clientes',
             'reportes': 'Reportes',
             'configuracion': 'Configuración'
         };
@@ -211,7 +210,6 @@ const App = {
             'nueva-cotizacion': 'nuevaCotizacion',
             'cotizaciones': 'cotizaciones',
             'pedidos': 'pedidos',
-            'clientes': 'clientes',
             'clientes': 'clientes',
             'reportes': 'reportes',
             'configuracion': 'configuracion'
