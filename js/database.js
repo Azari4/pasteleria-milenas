@@ -11,8 +11,17 @@ window.DB = {
         
         const saved = localStorage.getItem('milenas_v3_db');
         if (saved) {
-            const buf = Uint8Array.from(atob(saved), c => c.charCodeAt(0));
-            this.db = new SQL.Database(buf);
+            try {
+                const buf = Uint8Array.from(atob(saved), c => c.charCodeAt(0));
+                this.db = new SQL.Database(buf);
+            } catch(e) {
+                console.warn('BD corrupta, recreando...', e);
+                localStorage.removeItem('milenas_v3_db');
+                this.db = new SQL.Database();
+                this.createSchema();
+                this.seedData();
+                this.save();
+            }
         } else {
             this.db = new SQL.Database();
             this.createSchema();
@@ -23,9 +32,15 @@ window.DB = {
     },
 
     save() {
-        const data = this.db.export();
-        const b64 = btoa(String.fromCharCode(...data));
         try {
+            const data = this.db.export();
+            // Convertir en bloques para evitar stack overflow con arrays grandes
+            let binary = '';
+            const chunkSize = 8192;
+            for (let i = 0; i < data.length; i += chunkSize) {
+                binary += String.fromCharCode.apply(null, data.subarray(i, i + chunkSize));
+            }
+            const b64 = btoa(binary);
             localStorage.setItem('milenas_v3_db', b64);
         } catch(e) {
             console.warn('No se pudo guardar en localStorage:', e);
