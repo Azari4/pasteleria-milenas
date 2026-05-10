@@ -411,27 +411,30 @@ Pages.nuevaCotizacion = {
     },
 
     _resolverClienteId(s) {
-        // Retorna clienteId después de buscar/crear según corresponda
         let clienteId = null;
-        if (s.clienteDni && s.clienteDni.trim()) {
-            const existing = DB.getOne("SELECT id FROM clientes WHERE dni = ?", [s.clienteDni.trim()]);
-            if (existing) {
-                clienteId = existing.id;
-            } else if (s.clienteNombre.trim() && s.guardarCliente) {
-                DB.run("INSERT INTO clientes (nombre, dni, whatsapp) VALUES (?,?,?)",
-                    [s.clienteNombre.trim(), s.clienteDni.trim(), s.clienteWhatsapp || '']);
-                clienteId = DB.getOne("SELECT last_insert_rowid() as id").id;
-            }
-        } else if (s.clienteNombre && s.clienteNombre.trim()) {
-            const existing = DB.getOne("SELECT id FROM clientes WHERE nombre = ?", [s.clienteNombre.trim()]);
-            if (existing) {
-                clienteId = existing.id;
-            } else if (s.guardarCliente) {
-                DB.run("INSERT INTO clientes (nombre, whatsapp) VALUES (?,?)",
-                    [s.clienteNombre.trim(), s.clienteWhatsapp || '']);
-                clienteId = DB.getOne("SELECT last_insert_rowid() as id").id;
-            }
+        const dni = s.clienteDni ? s.clienteDni.trim() : '';
+        const nombre = s.clienteNombre ? s.clienteNombre.trim() : '';
+        const whatsapp = s.clienteWhatsapp ? s.clienteWhatsapp.trim() : '';
+
+        // 1. Intentar encontrar por DNI si existe
+        if (dni) {
+            const existing = DB.getOne("SELECT id FROM clientes WHERE dni = ?", [dni]);
+            if (existing) clienteId = existing.id;
         }
+
+        // 2. Si no hay DNI o no se encontró por DNI, intentar por nombre
+        if (!clienteId && nombre) {
+            const existing = DB.getOne("SELECT id FROM clientes WHERE nombre = ?", [nombre]);
+            if (existing) clienteId = existing.id;
+        }
+
+        // 3. Si no existe y se marcó "Guardar cliente", lo creamos
+        if (!clienteId && s.guardarCliente && (dni || nombre)) {
+            DB.run("INSERT INTO clientes (nombre, dni, whatsapp) VALUES (?,?,?)",
+                [nombre || 'Sin nombre', dni || null, whatsapp || null]);
+            clienteId = DB.getOne("SELECT last_insert_rowid() as id").id;
+        }
+
         return clienteId;
     },
 
