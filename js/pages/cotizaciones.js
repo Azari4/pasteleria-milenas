@@ -9,9 +9,11 @@ Pages.cotizaciones = {
     searchQuery: '',
     fechaInicio: '',
     fechaFin: '',
+    vendedoraFilter: 'todas',
 
     render() {
         const stats = this.getStats();
+        const vendedoras = this._getVendedoras();
 
         return `
         <!-- Stats Cards -->
@@ -19,28 +21,28 @@ Pages.cotizaciones = {
             <div class="stat-card">
                 <div class="stat-icon pink"><i data-lucide="file-text"></i></div>
                 <div class="stat-info">
-                    <h3>${stats.total}</h3>
+                    <h3 id="stat-total">${stats.total}</h3>
                     <p>Total cotizaciones</p>
                 </div>
             </div>
             <div class="stat-card">
                 <div class="stat-icon orange"><i data-lucide="clock"></i></div>
                 <div class="stat-info">
-                    <h3>${stats.pendientes}</h3>
+                    <h3 id="stat-pendientes">${stats.pendientes}</h3>
                     <p>Pendientes</p>
                 </div>
             </div>
             <div class="stat-card">
                 <div class="stat-icon green"><i data-lucide="check-circle"></i></div>
                 <div class="stat-info">
-                    <h3>${stats.aceptadas}</h3>
+                    <h3 id="stat-aceptadas">${stats.aceptadas}</h3>
                     <p>Aceptadas</p>
                 </div>
             </div>
             <div class="stat-card">
                 <div class="stat-icon blue"><i data-lucide="trending-up"></i></div>
                 <div class="stat-info">
-                    <h3>${App.formatCurrency(stats.totalMonto)}</h3>
+                    <h3 id="stat-monto">${App.formatCurrency(stats.totalMonto)}</h3>
                     <p>Monto total</p>
                 </div>
             </div>
@@ -52,17 +54,17 @@ Pages.cotizaciones = {
                 <!-- Fila 1: Filtros de estado + Nueva -->
                 <div style="display:flex; align-items:center; gap:.5rem; flex-wrap:wrap; margin-bottom:.6rem;">
                     <div class="filter-pills" style="flex:1; flex-wrap:wrap;">
-                        <button class="filter-pill ${this.currentFilter==='todas'?'active':''}" data-filter="todas">Todas</button>
-                        <button class="filter-pill ${this.currentFilter==='pendiente'?'active':''}" data-filter="pendiente">Pendientes</button>
-                        <button class="filter-pill ${this.currentFilter==='enviada'?'active':''}" data-filter="enviada">Enviadas</button>
-                        <button class="filter-pill ${this.currentFilter==='aceptada'?'active':''}" data-filter="aceptada">Aceptadas</button>
-                        <button class="filter-pill ${this.currentFilter==='rechazada'?'active':''}" data-filter="rechazada">Rechazadas</button>
+                        <button class="filter-pill ${this.currentFilter === 'todas' ? 'active' : ''}" data-filter="todas">Todas</button>
+                        <button class="filter-pill ${this.currentFilter === 'pendiente' ? 'active' : ''}" data-filter="pendiente">Pendientes</button>
+                        <button class="filter-pill ${this.currentFilter === 'enviada' ? 'active' : ''}" data-filter="enviada">Enviadas</button>
+                        <button class="filter-pill ${this.currentFilter === 'aceptada' ? 'active' : ''}" data-filter="aceptada">Aceptadas</button>
+                        <button class="filter-pill ${this.currentFilter === 'rechazada' ? 'active' : ''}" data-filter="rechazada">Rechazadas</button>
                     </div>
                     <button class="btn btn-primary btn-sm" onclick="window.location.hash='nueva-cotizacion'">
                         <i data-lucide="plus"></i> Nueva
                     </button>
                 </div>
-                <!-- Fila 2: Búsqueda, fechas y ordenamiento -->
+                <!-- Fila 2: Búsqueda, fechas, vendedora y ordenamiento -->
                 <div style="display:flex; align-items:center; gap:.5rem; flex-wrap:wrap;">
                     <div style="position:relative; flex:1; min-width:160px;">
                         <i data-lucide="search" style="position:absolute;left:.6rem;top:50%;transform:translateY(-50%);width:15px;height:15px;color:var(--text-light);pointer-events:none;"></i>
@@ -74,12 +76,16 @@ Pages.cotizaciones = {
                            style="height:36px; font-size:.82rem; width:140px;" value="${this.fechaInicio}" title="Fecha desde">
                     <input type="date" id="cot-fecha-fin" class="form-input" 
                            style="height:36px; font-size:.82rem; width:140px;" value="${this.fechaFin}" title="Fecha hasta">
+                    <select id="cot-vendedora" class="form-input" style="height:36px; font-size:.82rem; min-width:150px;">
+                        <option value="todas" ${this.vendedoraFilter === 'todas' ? 'selected' : ''}>👤 Todas las vendedoras</option>
+                        ${vendedoras.map(v => `<option value="${v.usuario_nombre}" ${this.vendedoraFilter === v.usuario_nombre ? 'selected' : ''}>${v.usuario_nombre}</option>`).join('')}
+                    </select>
                     <select id="cot-sort" class="form-input" style="height:36px; font-size:.82rem; width:160px;">
-                        <option value="fecha_desc" ${this.currentSort==='fecha_desc'?'selected':''}>📅 Más recientes</option>
-                        <option value="fecha_asc" ${this.currentSort==='fecha_asc'?'selected':''}>📅 Más antiguas</option>
-                        <option value="estado" ${this.currentSort==='estado'?'selected':''}>🏷 Por estado</option>
-                        <option value="total_desc" ${this.currentSort==='total_desc'?'selected':''}>💰 Mayor monto</option>
-                        <option value="total_asc" ${this.currentSort==='total_asc'?'selected':''}>💰 Menor monto</option>
+                        <option value="fecha_desc" ${this.currentSort === 'fecha_desc' ? 'selected' : ''}>📅 Más recientes</option>
+                        <option value="fecha_asc" ${this.currentSort === 'fecha_asc' ? 'selected' : ''}>📅 Más antiguas</option>
+                        <option value="estado" ${this.currentSort === 'estado' ? 'selected' : ''}>🏷 Por estado</option>
+                        <option value="total_desc" ${this.currentSort === 'total_desc' ? 'selected' : ''}>💰 Mayor monto</option>
+                        <option value="total_asc" ${this.currentSort === 'total_asc' ? 'selected' : ''}>💰 Menor monto</option>
                     </select>
                     <button class="btn btn-outline btn-sm" id="btn-clear-filters" title="Limpiar filtros">
                         <i data-lucide="x"></i>
@@ -102,6 +108,7 @@ Pages.cotizaciones = {
                             <th>Diseño</th>
                             <th>Total</th>
                             <th>Estado</th>
+                            <th>Vendedora</th>
                             <th>Fecha</th>
                             <th>Acciones</th>
                         </tr>
@@ -114,9 +121,13 @@ Pages.cotizaciones = {
         </div>`;
     },
 
+    _getVendedoras() {
+        return DB.getAll("SELECT DISTINCT usuario_nombre FROM cotizaciones WHERE usuario_nombre IS NOT NULL ORDER BY usuario_nombre ASC");
+    },
+
     renderRows(cotizaciones) {
         if (cotizaciones.length === 0) {
-            return `<tr><td colspan="10" class="text-center text-muted" style="padding:2rem;">No se encontraron cotizaciones</td></tr>`;
+            return `<tr><td colspan="11" class="text-center text-muted" style="padding:2rem;">No se encontraron cotizaciones</td></tr>`;
         }
         return cotizaciones.map(c => `
             <tr>
@@ -128,6 +139,7 @@ Pages.cotizaciones = {
                 <td>${c.diseno}</td>
                 <td><strong>${App.formatCurrency(c.total)}</strong></td>
                 <td><span class="status-badge status-${c.estado}">${App.statusLabel(c.estado)}</span></td>
+                <td style="font-size:.82rem;color:var(--text-medium);">${c.usuario_nombre || '—'}</td>
                 <td style="font-size:.82rem;">${App.formatDate(c.created_at)}</td>
                 <td>
                     <div class="actions">
@@ -153,8 +165,11 @@ Pages.cotizaciones = {
         `).join('');
     },
 
-    getStats() {
-        const all = DB.getAll("SELECT * FROM cotizaciones");
+    getStats(vendedora) {
+        let all = DB.getAll("SELECT * FROM cotizaciones");
+        if (vendedora && vendedora !== 'todas') {
+            all = all.filter(c => (c.usuario_nombre || '') === vendedora);
+        }
         return {
             total: all.length,
             pendientes: all.filter(c => c.estado === 'pendiente').length,
@@ -164,7 +179,6 @@ Pages.cotizaciones = {
     },
 
     getCotizaciones() {
-        // Base query con JOIN para traer DNI
         let sql = `SELECT c.*, cl.dni FROM cotizaciones c 
                    LEFT JOIN clientes cl ON c.cliente_id = cl.id`;
         const params = [];
@@ -174,7 +188,6 @@ Pages.cotizaciones = {
             params.push(this.currentFilter);
         }
 
-        // Orden base
         const orderMap = {
             'fecha_desc': 'c.created_at DESC',
             'fecha_asc': 'c.created_at ASC',
@@ -200,8 +213,12 @@ Pages.cotizaciones = {
             rows = rows.filter(r => r.created_at >= this.fechaInicio);
         }
         if (this.fechaFin) {
-            // Incluir todo el día final
             rows = rows.filter(r => r.created_at.substring(0, 10) <= this.fechaFin);
+        }
+
+        // Filtro por vendedora
+        if (this.vendedoraFilter && this.vendedoraFilter !== 'todas') {
+            rows = rows.filter(r => (r.usuario_nombre || '') === this.vendedoraFilter);
         }
 
         return rows;
@@ -213,6 +230,16 @@ Pages.cotizaciones = {
             tbody.innerHTML = this.renderRows(this.getCotizaciones());
             if (window.lucide) lucide.createIcons();
         }
+        // Actualizar stats según vendedora seleccionada
+        const stats = this.getStats(this.vendedoraFilter);
+        const elTotal = document.getElementById('stat-total');
+        const elPend = document.getElementById('stat-pendientes');
+        const elAcep = document.getElementById('stat-aceptadas');
+        const elMonto = document.getElementById('stat-monto');
+        if (elTotal) elTotal.textContent = stats.total;
+        if (elPend) elPend.textContent = stats.pendientes;
+        if (elAcep) elAcep.textContent = stats.aceptadas;
+        if (elMonto) elMonto.textContent = App.formatCurrency(stats.totalMonto);
     },
 
     init() {
@@ -221,6 +248,7 @@ Pages.cotizaciones = {
         this.searchQuery = '';
         this.fechaInicio = '';
         this.fechaFin = '';
+        this.vendedoraFilter = 'todas';
 
         // Filtros de estado
         document.querySelectorAll('.filter-pill').forEach(pill => {
@@ -247,6 +275,10 @@ Pages.cotizaciones = {
         if (fechaIni) fechaIni.addEventListener('change', (e) => { this.fechaInicio = e.target.value; this.refreshTable(); });
         if (fechaFin) fechaFin.addEventListener('change', (e) => { this.fechaFin = e.target.value; this.refreshTable(); });
 
+        // Filtro por vendedora
+        const vendedoraSel = document.getElementById('cot-vendedora');
+        if (vendedoraSel) vendedoraSel.addEventListener('change', (e) => { this.vendedoraFilter = e.target.value; this.refreshTable(); });
+
         // Ordenamiento
         const sortSel = document.getElementById('cot-sort');
         if (sortSel) sortSel.addEventListener('change', (e) => { this.currentSort = e.target.value; this.refreshTable(); });
@@ -260,7 +292,7 @@ Pages.cotizaciones = {
                 this.fechaFin = '';
                 this.currentFilter = 'todas';
                 this.currentSort = 'fecha_desc';
-                // Re-render la página completa para resetear visualmente los inputs
+                this.vendedoraFilter = 'todas';
                 App.navigateTo('cotizaciones');
             });
         }
@@ -271,9 +303,8 @@ Pages.cotizaciones = {
         if (!c) return;
 
         let extras = [];
-        try { extras = JSON.parse(c.extras || '[]'); } catch(e) {}
+        try { extras = JSON.parse(c.extras || '[]'); } catch (e) { }
 
-        // Buscar el precio de tamaño/sabor/diseño desde catálogo si no están en el registro
         const tamanoItem = DB.getOne("SELECT precio FROM catalogo WHERE categoria='tamano' AND CAST(nombre AS INTEGER)=?", [c.tamano]);
         const saborItem = DB.getOne("SELECT precio FROM catalogo WHERE categoria='sabor' AND nombre=?", [c.sabor]);
         const disenoItem = DB.getOne("SELECT precio FROM catalogo WHERE categoria='diseno' AND nombre=?", [c.diseno]);
@@ -300,14 +331,14 @@ Pages.cotizaciones = {
     verDetalle(id) {
         const c = DB.getOne("SELECT c.*, cl.dni FROM cotizaciones c LEFT JOIN clientes cl ON c.cliente_id = cl.id WHERE c.id = ?", [id]);
         if (!c) return;
-        
+
         let extras = [];
-        try { extras = JSON.parse(c.extras || '[]'); } catch(e) {}
-        
-        const extrasHTML = extras.length > 0 
-            ? `<h4 style="margin-top:.8rem;font-size:.9rem;">Extras:</h4><ul style="padding-left:1rem;">${extras.map(e => `<li style="font-size:.85rem;">${e.nombre} — ${App.formatCurrency(e.precio)}</li>`).join('')}</ul>` 
+        try { extras = JSON.parse(c.extras || '[]'); } catch (e) { }
+
+        const extrasHTML = extras.length > 0
+            ? `<h4 style="margin-top:.8rem;font-size:.9rem;">Extras:</h4><ul style="padding-left:1rem;">${extras.map(e => `<li style="font-size:.85rem;">${e.nombre} — ${App.formatCurrency(e.precio)}</li>`).join('')}</ul>`
             : '';
-        
+
         App.showModal(`Cotización ${c.numero}`, `
             <div style="display:grid;grid-template-columns:1fr 1fr;gap:.5rem .8rem;font-size:.9rem;">
                 <p><strong>Cliente:</strong></p><p>${c.cliente_nombre || '—'}</p>
@@ -316,6 +347,7 @@ Pages.cotizaciones = {
                 <p><strong>Sabor:</strong></p><p>${c.sabor}</p>
                 <p><strong>Diseño:</strong></p><p>${c.diseno}</p>
                 <p><strong>Estado:</strong></p><p><span class="status-badge status-${c.estado}">${App.statusLabel(c.estado)}</span></p>
+                <p><strong>Vendedora:</strong></p><p>${c.usuario_nombre || '—'}</p>
                 <p><strong>Fecha:</strong></p><p>${App.formatDateTime(c.created_at)}</p>
             </div>
             ${extrasHTML}
@@ -337,18 +369,19 @@ Pages.cotizaciones = {
 
     cambiarEstado(id, estado) {
         if (estado === 'aceptada') {
-            // Pedir fecha de entrega antes de crear el pedido
-            Pages.pedidos.pedirFechaYCrear((fecha, hora) => {
+            Pages.pedidos.pedirFechaYCrear((fecha, hora, anticipo) => {
                 DB.run("UPDATE cotizaciones SET estado = ? WHERE id = ?", [estado, id]);
                 const c = DB.getOne("SELECT * FROM cotizaciones WHERE id = ?", [id]);
                 if (c) {
                     const count = DB.getOne("SELECT COUNT(*) as c FROM pedidos").c + 1;
                     const numeroPed = `PED-${String(count).padStart(3, '0')}`;
                     const desc = `Pastel ${c.sabor} ${c.tamano} porc. - ${c.diseno}`;
+                    const anticipoNum = parseFloat(anticipo) || 0;
+                    const saldoPendiente = Math.max(0, c.total - anticipoNum);
                     DB.run(
-                        `INSERT INTO pedidos (numero, cotizacion_id, cliente_id, cliente_nombre, descripcion, fecha_entrega, hora_entrega, estado, total, notas)
-                         VALUES (?,?,?,?,?,?,?,?,?,?)`,
-                        [numeroPed, c.id, c.cliente_id, c.cliente_nombre, desc, fecha, hora, 'en_preparacion', c.total, c.observaciones || '']
+                        `INSERT INTO pedidos (numero, cotizacion_id, cliente_id, cliente_nombre, descripcion, fecha_entrega, hora_entrega, estado, total, anticipo, saldo_pendiente, notas)
+                         VALUES (?,?,?,?,?,?,?,?,?,?,?,?)`,
+                        [numeroPed, c.id, c.cliente_id, c.cliente_nombre, desc, fecha, hora, 'en_preparacion', c.total, anticipoNum, saldoPendiente, c.observaciones || '']
                     );
                     App.showToast(`Cotización aceptada. Pedido ${numeroPed} para el ${App.formatDate(fecha)}`, 'success');
                 }

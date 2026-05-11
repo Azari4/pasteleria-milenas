@@ -3,18 +3,20 @@
    ============================================= */
 window.DB = {
     db: null,
-    
+
     async init() {
         const SQL = await initSqlJs({
             locateFile: file => `https://cdnjs.cloudflare.com/ajax/libs/sql.js/1.10.3/${file}`
         });
-        
+
         const saved = localStorage.getItem('milenas_v3_db');
         if (saved) {
             try {
                 const buf = Uint8Array.from(atob(saved), c => c.charCodeAt(0));
                 this.db = new SQL.Database(buf);
-            } catch(e) {
+                // Migraciones para bases de datos existentes
+                this._runMigrations();
+            } catch (e) {
                 console.warn('BD corrupta, recreando...', e);
                 localStorage.removeItem('milenas_v3_db');
                 this.db = new SQL.Database();
@@ -31,10 +33,27 @@ window.DB = {
         return this.db;
     },
 
+    _runMigrations() {
+        // Migración 1: columnas anticipo y saldo_pendiente en pedidos
+        try {
+            this.db.run("ALTER TABLE pedidos ADD COLUMN anticipo REAL DEFAULT 0");
+        } catch (e) { /* ya existe */ }
+        try {
+            this.db.run("ALTER TABLE pedidos ADD COLUMN saldo_pendiente REAL DEFAULT 0");
+        } catch (e) { /* ya existe */ }
+        // Migración 2: columna usuario_id en cotizaciones
+        try {
+            this.db.run("ALTER TABLE cotizaciones ADD COLUMN usuario_id INTEGER");
+        } catch (e) { /* ya existe */ }
+        try {
+            this.db.run("ALTER TABLE cotizaciones ADD COLUMN usuario_nombre TEXT");
+        } catch (e) { /* ya existe */ }
+        this.save();
+    },
+
     save() {
         try {
             const data = this.db.export();
-            // Convertir en bloques para evitar stack overflow con arrays grandes
             let binary = '';
             const chunkSize = 8192;
             for (let i = 0; i < data.length; i += chunkSize) {
@@ -42,7 +61,7 @@ window.DB = {
             }
             const b64 = btoa(binary);
             localStorage.setItem('milenas_v3_db', b64);
-        } catch(e) {
+        } catch (e) {
             console.warn('No se pudo guardar en localStorage:', e);
         }
     },
@@ -115,8 +134,11 @@ window.DB = {
                 observaciones TEXT,
                 total REAL NOT NULL,
                 estado TEXT DEFAULT 'pendiente',
+                usuario_id INTEGER,
+                usuario_nombre TEXT,
                 created_at TEXT DEFAULT (datetime('now','localtime')),
-                FOREIGN KEY (cliente_id) REFERENCES clientes(id)
+                FOREIGN KEY (cliente_id) REFERENCES clientes(id),
+                FOREIGN KEY (usuario_id) REFERENCES usuarios(id)
             );
         `);
 
@@ -132,6 +154,8 @@ window.DB = {
                 hora_entrega TEXT,
                 estado TEXT DEFAULT 'en_preparacion',
                 total REAL NOT NULL,
+                anticipo REAL DEFAULT 0,
+                saldo_pendiente REAL DEFAULT 0,
                 notas TEXT,
                 created_at TEXT DEFAULT (datetime('now','localtime')),
                 FOREIGN KEY (cotizacion_id) REFERENCES cotizaciones(id),
@@ -190,52 +214,52 @@ window.DB = {
             );
         });
 
-        // === COTIZACIONES ===
+        // === COTIZACIONES (con usuario_id asignado) ===
         const cotizaciones = [
-            ["COT-001", 1, "María García López", 10, 120, "Vainilla", 0, "Básico", 0, 
-             JSON.stringify([{nombre:"Hoja de arroz impresa",precio:35},{nombre:"Perlas",precio:10},{nombre:"Figura fondant pequeña",precio:30},{nombre:"Nombre personalizado",precio:10}]),
-             "Pastel para cumpleaños de Sofía, 5 años", 205, "aceptada", "2026-04-20 10:30:00"],
+            ["COT-001", 1, "María García López", 10, 120, "Vainilla", 0, "Básico", 0,
+                JSON.stringify([{ nombre: "Hoja de arroz impresa", precio: 35 }, { nombre: "Perlas", precio: 10 }, { nombre: "Figura fondant pequeña", precio: 30 }, { nombre: "Nombre personalizado", precio: 10 }]),
+                "Pastel para cumpleaños de Sofía, 5 años", 205, "aceptada", 2, "Ana Martínez", "2026-04-20 10:30:00"],
             ["COT-002", 2, "Carlos Hernández", 20, 180, "Chocolate", 0, "Personalizado", 30,
-             JSON.stringify([{nombre:"Topper acrílico",precio:15},{nombre:"Velas especiales",precio:10}]),
-             "Aniversario de bodas", 235, "pendiente", "2026-04-22 14:15:00"],
+                JSON.stringify([{ nombre: "Topper acrílico", precio: 15 }, { nombre: "Velas especiales", precio: 10 }]),
+                "Aniversario de bodas", 235, "pendiente", 2, "Ana Martínez", "2026-04-22 14:15:00"],
             ["COT-003", 3, "Ana Sofía López", 15, 150, "Red Velvet", 20, "Temático", 50,
-             JSON.stringify([{nombre:"Flores de crema",precio:15},{nombre:"Figura fondant mediana",precio:50},{nombre:"Nombre personalizado",precio:10}]),
-             "Baby shower, tema: unicornios", 295, "enviada", "2026-04-23 09:00:00"],
+                JSON.stringify([{ nombre: "Flores de crema", precio: 15 }, { nombre: "Figura fondant mediana", precio: 50 }, { nombre: "Nombre personalizado", precio: 10 }]),
+                "Baby shower, tema: unicornios", 295, "enviada", 1, "Administrador General", "2026-04-23 09:00:00"],
             ["COT-004", 5, "Valentina Castillo", 30, 230, "Tres leches", 20, "Temático", 50,
-             JSON.stringify([{nombre:"Hoja de arroz impresa",precio:35},{nombre:"Figura fondant grande",precio:80},{nombre:"Perlas",precio:10},{nombre:"Entrega urgente",precio:30}]),
-             "Fiesta de XV años, tema: Cenicienta", 455, "aceptada", "2026-04-18 11:00:00"],
+                JSON.stringify([{ nombre: "Hoja de arroz impresa", precio: 35 }, { nombre: "Figura fondant grande", precio: 80 }, { nombre: "Perlas", precio: 10 }, { nombre: "Entrega urgente", precio: 30 }]),
+                "Fiesta de XV años, tema: Cenicienta", 455, "aceptada", 2, "Ana Martínez", "2026-04-18 11:00:00"],
             ["COT-005", 4, "Roberto Martínez", 10, 120, "Marmoleado", 0, "Básico", 0,
-             JSON.stringify([{nombre:"Chispas de colores",precio:10},{nombre:"Número",precio:15}]),
-             "", 145, "rechazada", "2026-04-15 16:30:00"],
+                JSON.stringify([{ nombre: "Chispas de colores", precio: 10 }, { nombre: "Número", precio: 15 }]),
+                "", 145, "rechazada", 1, "Administrador General", "2026-04-15 16:30:00"],
             ["COT-006", 6, "Diego Morales Pérez", 50, 320, "Chocolate", 0, "Personalizado", 30,
-             JSON.stringify([{nombre:"Hoja de arroz impresa",precio:35},{nombre:"Perlas",precio:10},{nombre:"Flores de crema",precio:15},{nombre:"Figura fondant mediana",precio:50},{nombre:"Nombre personalizado",precio:10}]),
-             "Graduación universitaria USAC", 470, "aceptada", "2026-04-19 08:00:00"],
+                JSON.stringify([{ nombre: "Hoja de arroz impresa", precio: 35 }, { nombre: "Perlas", precio: 10 }, { nombre: "Flores de crema", precio: 15 }, { nombre: "Figura fondant mediana", precio: 50 }, { nombre: "Nombre personalizado", precio: 10 }]),
+                "Graduación universitaria USAC", 470, "aceptada", 2, "Ana Martínez", "2026-04-19 08:00:00"],
             ["COT-007", 7, "Luisa Fernanda Ramírez", 20, 180, "Vainilla", 0, "Personalizado", 30,
-             JSON.stringify([{nombre:"Topper acrílico",precio:15},{nombre:"Nombre personalizado",precio:10}]),
-             "Evento corporativo Empresa ABC", 235, "enviada", "2026-04-24 10:00:00"],
+                JSON.stringify([{ nombre: "Topper acrílico", precio: 15 }, { nombre: "Nombre personalizado", precio: 10 }]),
+                "Evento corporativo Empresa ABC", 235, "enviada", 1, "Administrador General", "2026-04-24 10:00:00"],
             ["COT-008", 1, "María García López", 15, 150, "Chocolate", 0, "Temático", 50,
-             JSON.stringify([{nombre:"Figura fondant pequeña",precio:30},{nombre:"Nombre personalizado",precio:10},{nombre:"Velas especiales",precio:10}]),
-             "Cumpleaños de Daniela", 250, "pendiente", "2026-04-25 15:00:00"],
+                JSON.stringify([{ nombre: "Figura fondant pequeña", precio: 30 }, { nombre: "Nombre personalizado", precio: 10 }, { nombre: "Velas especiales", precio: 10 }]),
+                "Cumpleaños de Daniela", 250, "pendiente", 2, "Ana Martínez", "2026-04-25 15:00:00"],
             ["COT-009", 8, "Fernando Pérez", 10, 120, "Vainilla", 0, "Básico", 0,
-             JSON.stringify([]), "", 120, "pendiente", "2026-04-25 17:30:00"],
+                JSON.stringify([]), "", 120, "pendiente", 1, "Administrador General", "2026-04-25 17:30:00"],
             ["COT-010", 3, "Ana Sofía López", 20, 180, "Tres leches", 20, "Personalizado", 30,
-             JSON.stringify([{nombre:"Perlas",precio:10},{nombre:"Flores de crema",precio:15}]),
-             "Cumpleaños de mamá", 255, "aceptada", "2026-04-16 09:30:00"],
+                JSON.stringify([{ nombre: "Perlas", precio: 10 }, { nombre: "Flores de crema", precio: 15 }]),
+                "Cumpleaños de mamá", 255, "aceptada", 2, "Ana Martínez", "2026-04-16 09:30:00"],
             ["COT-011", 5, "Valentina Castillo", 15, 150, "Marmoleado", 0, "Básico", 0,
-             JSON.stringify([{nombre:"Chispas de colores",precio:10}]),
-             "Pedido pequeño para reunión", 160, "aceptada", "2026-04-21 13:00:00"],
+                JSON.stringify([{ nombre: "Chispas de colores", precio: 10 }]),
+                "Pedido pequeño para reunión", 160, "aceptada", 1, "Administrador General", "2026-04-21 13:00:00"],
             ["COT-012", 2, "Carlos Hernández", 30, 230, "Red Velvet", 20, "Temático", 50,
-             JSON.stringify([{nombre:"Hoja de arroz impresa",precio:35},{nombre:"Figura fondant grande",precio:80},{nombre:"Entrega urgente",precio:30}]),
-             "Fiesta sorpresa para esposa", 445, "pendiente", "2026-04-26 10:00:00"]
+                JSON.stringify([{ nombre: "Hoja de arroz impresa", precio: 35 }, { nombre: "Figura fondant grande", precio: 80 }, { nombre: "Entrega urgente", precio: 30 }]),
+                "Fiesta sorpresa para esposa", 445, "pendiente", 2, "Ana Martínez", "2026-04-26 10:00:00"]
         ];
         cotizaciones.forEach(c => {
             this.db.run(
-                `INSERT INTO cotizaciones (numero, cliente_id, cliente_nombre, tamano, precio_tamano, sabor, precio_sabor, diseno, precio_diseno, extras, observaciones, total, estado, created_at) 
-                 VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)`, c
+                `INSERT INTO cotizaciones (numero, cliente_id, cliente_nombre, tamano, precio_tamano, sabor, precio_sabor, diseno, precio_diseno, extras, observaciones, total, estado, usuario_id, usuario_nombre, created_at) 
+                 VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`, c
             );
         });
 
-        // === PEDIDOS ===
+        // === PEDIDOS (con anticipo y saldo_pendiente) ===
         const hoy = new Date();
         const sumarDias = (dias) => {
             const d = new Date(hoy);
@@ -243,17 +267,17 @@ window.DB = {
             return d.toISOString().split('T')[0];
         };
         const pedidos = [
-            ["PED-001", 1, 1, "María García López", "Pastel Vainilla 10 porc. - Básico - Cumpleaños Sofía", sumarDias(1), "14:00", "en_preparacion", 205, "Decorar con tema princesas", sumarDias(-5) + " 11:00:00"],
-            ["PED-002", 4, 5, "Valentina Castillo", "Pastel Tres Leches 30 porc. - Temático Cenicienta - XV años", sumarDias(2), "10:00", "en_preparacion", 455, "Incluye castillo de fondant", sumarDias(-4) + " 12:00:00"],
-            ["PED-003", 6, 6, "Diego Morales Pérez", "Pastel Chocolate 50 porc. - Personalizado - Graduación USAC", sumarDias(5), "16:00", "en_preparacion", 470, "Logo USAC en hoja de arroz", sumarDias(-3) + " 09:00:00"],
-            ["PED-004", 10, 3, "Ana Sofía López", "Pastel Tres Leches 20 porc. - Personalizado - Cumpleaños mamá", sumarDias(0), "12:00", "listo", 255, "", sumarDias(-6) + " 10:00:00"],
-            ["PED-005", 11, 5, "Valentina Castillo", "Pastel Marmoleado 15 porc. - Básico - Reunión", sumarDias(-1), "09:00", "entregado", 160, "Entregado en Antigua", sumarDias(-7) + " 14:00:00"],
-            ["PED-006", null, 7, "Luisa Fernanda Ramírez", "Pastel Vainilla 20 porc. - Personalizado - Evento corporativo", sumarDias(7), "08:00", "en_preparacion", 235, "Necesita factura", sumarDias(-2) + " 11:00:00"]
+            ["PED-001", 1, 1, "María García López", "Pastel Vainilla 10 porc. - Básico - Cumpleaños Sofía", sumarDias(1), "14:00", "en_preparacion", 205, 100, 105, "Decorar con tema princesas", sumarDias(-5) + " 11:00:00"],
+            ["PED-002", 4, 5, "Valentina Castillo", "Pastel Tres Leches 30 porc. - Temático Cenicienta - XV años", sumarDias(2), "10:00", "en_preparacion", 455, 200, 255, "Incluye castillo de fondant", sumarDias(-4) + " 12:00:00"],
+            ["PED-003", 6, 6, "Diego Morales Pérez", "Pastel Chocolate 50 porc. - Personalizado - Graduación USAC", sumarDias(5), "16:00", "en_preparacion", 470, 0, 470, "Logo USAC en hoja de arroz", sumarDias(-3) + " 09:00:00"],
+            ["PED-004", 10, 3, "Ana Sofía López", "Pastel Tres Leches 20 porc. - Personalizado - Cumpleaños mamá", sumarDias(0), "12:00", "listo", 255, 255, 0, "", sumarDias(-6) + " 10:00:00"],
+            ["PED-005", 11, 5, "Valentina Castillo", "Pastel Marmoleado 15 porc. - Básico - Reunión", sumarDias(-1), "09:00", "entregado", 160, 160, 0, "Entregado en Antigua", sumarDias(-7) + " 14:00:00"],
+            ["PED-006", null, 7, "Luisa Fernanda Ramírez", "Pastel Vainilla 20 porc. - Personalizado - Evento corporativo", sumarDias(7), "08:00", "en_preparacion", 235, 0, 235, "Necesita factura", sumarDias(-2) + " 11:00:00"]
         ];
         pedidos.forEach(p => {
             this.db.run(
-                `INSERT INTO pedidos (numero, cotizacion_id, cliente_id, cliente_nombre, descripcion, fecha_entrega, hora_entrega, estado, total, notas, created_at)
-                 VALUES (?,?,?,?,?,?,?,?,?,?,?)`, p
+                `INSERT INTO pedidos (numero, cotizacion_id, cliente_id, cliente_nombre, descripcion, fecha_entrega, hora_entrega, estado, total, anticipo, saldo_pendiente, notas, created_at)
+                 VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)`, p
             );
         });
 

@@ -66,25 +66,25 @@ const App = {
             e.preventDefault();
             const user = document.getElementById('login-usuario').value.trim();
             const pass = document.getElementById('login-password').value.trim();
-            
+
             const dbUser = DB.getOne("SELECT * FROM usuarios WHERE usuario = ? AND password = ? AND activo = 1", [user, pass]);
-            
+
             if (dbUser) {
                 this.currentUser = dbUser;
                 localStorage.setItem('milenas_session', JSON.stringify(dbUser));
                 document.getElementById('login-error').style.display = 'none';
                 document.getElementById('login-screen').style.display = 'none';
                 document.getElementById('app').style.display = 'flex';
-                
+
                 this.updateUIForRole();
                 this.setupRouter();
                 this.setupSidebar();
                 this.setupHeader();
-                
+
                 // Redirigir a inicio si no es admin y quiere entrar a algo prohibido
                 const hash = window.location.hash.slice(1) || 'nueva-cotizacion';
                 this.navigateTo(hash);
-                
+
                 this.showToast(`Bienvenido ${dbUser.nombre}`, 'success');
             } else {
                 document.getElementById('login-error').style.display = 'block';
@@ -124,11 +124,11 @@ const App = {
             localStorage.removeItem('milenas_session');
             document.getElementById('app').style.display = 'none';
             document.getElementById('login-screen').style.display = 'flex';
-            
+
             // Clean inputs
             document.getElementById('login-usuario').value = '';
             document.getElementById('login-password').value = '';
-            
+
             this.showToast('Sesión cerrada', 'info');
         });
     },
@@ -140,22 +140,35 @@ const App = {
             target.setDate(target.getDate() + 2);
             const limitStr = target.toISOString().split('T')[0];
             const urgentes = DB.getAll("SELECT * FROM pedidos WHERE estado = 'en_preparacion' AND fecha_entrega <= ? ORDER BY fecha_entrega ASC", [limitStr]);
-            if (urgentes.length === 0) {
+            const listosSaldo = DB.getAll("SELECT * FROM pedidos WHERE estado = 'listo' AND saldo_pendiente > 0 ORDER BY fecha_entrega ASC");
+
+            if (urgentes.length === 0 && listosSaldo.length === 0) {
                 this.showToast('No hay notificaciones nuevas', 'info');
             } else {
                 let body = `<div style="max-height:50vh;overflow-y:auto;">`;
-                body += `<p style="font-size:.85rem;color:var(--text-medium);margin-bottom:.8rem;">Pedidos con entrega en las próximas 48 horas:</p>`;
-                urgentes.forEach(p => {
-                    body += `<div style="padding:.6rem;background:var(--bg-main);border-radius:8px;margin-bottom:.5rem;font-size:.85rem;">
-                        <strong>${p.numero}</strong> — ${p.cliente_nombre || 'Sin cliente'}<br>
-                        <span style="color:var(--danger);">📅 Entrega: ${this.formatDate(p.fecha_entrega)} ${p.hora_entrega || ''}</span>
-                    </div>`;
-                });
+                if (urgentes.length > 0) {
+                    body += `<p style="font-size:.85rem;color:var(--text-medium);margin-bottom:.8rem;">Pedidos con entrega en las próximas 48 horas:</p>`;
+                    urgentes.forEach(p => {
+                        body += `<div style="padding:.6rem;background:var(--bg-main);border-radius:8px;margin-bottom:.5rem;font-size:.85rem;">
+                            <strong>${p.numero}</strong> — ${p.cliente_nombre || 'Sin cliente'}<br>
+                            <span style="color:var(--danger);">📅 Entrega: ${this.formatDate(p.fecha_entrega)} ${p.hora_entrega || ''}</span>
+                        </div>`;
+                    });
+                }
+                if (listosSaldo.length > 0) {
+                    body += `<p style="font-size:.85rem;color:var(--text-medium);margin-top:${urgentes.length > 0 ? '1rem' : '0'};margin-bottom:.8rem;">Pedidos listos con saldo pendiente de cobro:</p>`;
+                    listosSaldo.forEach(p => {
+                        body += `<div style="padding:.6rem;background:var(--bg-main);border-radius:8px;margin-bottom:.5rem;font-size:.85rem;">
+                            <strong>${p.numero}</strong> — ${p.cliente_nombre || 'Sin cliente'}<br>
+                            <span style="color:var(--warning);">💰 Saldo a cobrar: ${this.formatCurrency(p.saldo_pendiente)}</span>
+                        </div>`;
+                    });
+                }
                 body += `</div>`;
                 this.showModal('🔔 Notificaciones', body, `<button class="btn btn-outline" onclick="App.closeModal()">Cerrar</button>`);
             }
         });
-        
+
         // Update notification count
         this.updateNotifications();
 
@@ -165,10 +178,11 @@ const App = {
         const target = new Date();
         target.setDate(target.getDate() + 2);
         const limitStr = target.toISOString().split('T')[0];
-        const count = DB.getOne("SELECT COUNT(*) as c FROM pedidos WHERE estado = 'en_preparacion' AND fecha_entrega <= ?", [limitStr]);
+        const countUrgentes = DB.getOne("SELECT COUNT(*) as c FROM pedidos WHERE estado = 'en_preparacion' AND fecha_entrega <= ?", [limitStr]);
+        const countSaldo = DB.getOne("SELECT COUNT(*) as c FROM pedidos WHERE estado = 'listo' AND saldo_pendiente > 0");
         const badge = document.getElementById('notification-badge');
         if (badge) {
-            const n = count ? count.c : 0;
+            const n = (countUrgentes ? countUrgentes.c : 0) + (countSaldo ? countSaldo.c : 0);
             badge.textContent = n;
             badge.style.display = n > 0 ? 'flex' : 'none';
         }
@@ -205,7 +219,7 @@ const App = {
         };
 
         const pageKey = pageKeys[page];
-        
+
         // Authorization check
         const adminPages = ['reportes', 'configuracion'];
         if (adminPages.includes(page) && this.currentUser && this.currentUser.rol !== 'admin') {
@@ -219,15 +233,15 @@ const App = {
         if (pageModule) {
             const content = document.getElementById('main-content');
             content.innerHTML = `<div class="page-enter">${pageModule.render()}</div>`;
-            
+
             // Re-create icons
             if (window.lucide) lucide.createIcons();
 
             // Initialize page
             if (pageModule.init) pageModule.init();
-            
+
             this.currentPage = page;
-            
+
             // Update notifications count
             this.updateNotifications();
         }
@@ -235,7 +249,7 @@ const App = {
 
     destroyCharts() {
         this.chartInstances.forEach(c => {
-            try { c.destroy(); } catch(e) {}
+            try { c.destroy(); } catch (e) { }
         });
         this.chartInstances = [];
     },
@@ -249,7 +263,7 @@ const App = {
         const container = document.getElementById('toast-container');
         const toast = document.createElement('div');
         toast.className = `toast toast-${type}`;
-        
+
         const icons = { success: '✓', error: '✕', info: 'ℹ', warning: '⚠' };
         toast.innerHTML = `<span>${icons[type] || 'ℹ'}</span><span>${message}</span>`;
         container.appendChild(toast);

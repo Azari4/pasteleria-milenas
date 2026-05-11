@@ -20,6 +20,16 @@ Pages.nuevaCotizacion = {
         editingId: null   // si viene de "Editar cotización"
     },
 
+    _getSavedCheckbox() {
+        // Leer preferencia guardada; default true si nunca se guardó
+        const saved = localStorage.getItem('milenas_guardarCliente');
+        return saved === null ? true : saved === 'true';
+    },
+
+    _saveCheckbox(val) {
+        localStorage.setItem('milenas_guardarCliente', val ? 'true' : 'false');
+    },
+
     render() {
         const s = this.state;
         return `
@@ -122,7 +132,7 @@ Pages.nuevaCotizacion = {
                     </div>
                     <div class="client-input-group">
                         <span class="input-icon">📱</span>
-                        <input type="text" id="cot-cliente-whatsapp" placeholder="WhatsApp" value="${s.clienteWhatsapp}">
+                        <input type="text" id="cot-cliente-whatsapp" placeholder="WhatsApp *" value="${s.clienteWhatsapp}">
                     </div>
                     <p id="cot-cliente-found" style="font-size:.78rem; color:var(--success); display:none; margin:.3rem 0;"></p>
                     <label class="checkbox-item" style="margin:.6rem 0 .8rem; display:flex; align-items:center; gap:.5rem; cursor:pointer;">
@@ -158,15 +168,15 @@ Pages.nuevaCotizacion = {
 
     renderSizeCards() {
         const items = DB.getAll("SELECT * FROM catalogo WHERE categoria='tamano' AND activo=1 ORDER BY precio ASC");
-        if(items.length === 0) return '<p class="text-muted">No hay tamaños configurados.</p>';
-        
+        if (items.length === 0) return '<p class="text-muted">No hay tamaños configurados.</p>';
+
         return items.map(s => {
             const sizeNum = parseInt(s.nombre);
             const isSelected = this.state.tamano === sizeNum;
             return `
             <div class="size-card ${isSelected ? 'selected' : ''}" 
                  data-size="${sizeNum}" data-price="${s.precio}">
-                <div class="size-cake" style="font-size:${1.5 + (sizeNum/50)*1.2}rem">${s.emoji || '🎂'}</div>
+                <div class="size-cake" style="font-size:${1.5 + (sizeNum / 50) * 1.2}rem">${s.emoji || '🎂'}</div>
                 <div class="size-portions">${sizeNum}</div>
                 <div class="size-label">porciones</div>
                 <div class="size-price">${App.formatCurrency(s.precio)}</div>
@@ -177,7 +187,7 @@ Pages.nuevaCotizacion = {
 
     renderFlavorBtns() {
         const items = DB.getAll("SELECT * FROM catalogo WHERE categoria='sabor' AND activo=1 ORDER BY precio ASC");
-        if(items.length === 0) return '<p class="text-muted">No hay sabores configurados.</p>';
+        if (items.length === 0) return '<p class="text-muted">No hay sabores configurados.</p>';
 
         return items.map(f => `
             <button class="flavor-btn ${this.state.sabor === f.nombre ? 'selected' : ''}"
@@ -190,7 +200,7 @@ Pages.nuevaCotizacion = {
 
     renderDesignCards() {
         const items = DB.getAll("SELECT * FROM catalogo WHERE categoria='diseno' AND activo=1 ORDER BY precio ASC");
-        if(items.length === 0) return '<p class="text-muted">No hay diseños configurados.</p>';
+        if (items.length === 0) return '<p class="text-muted">No hay diseños configurados.</p>';
 
         return items.map(d => {
             const label = d.precio === 0 ? 'Incluido' : `+ ${App.formatCurrency(d.precio)}`;
@@ -233,7 +243,7 @@ Pages.nuevaCotizacion = {
                 </ul>
             </div>
         ` : '';
-        
+
         return `
             <div class="summary-line">
                 <span class="label">Tamaño:</span>
@@ -317,8 +327,34 @@ Pages.nuevaCotizacion = {
             wpInput.addEventListener('input', (e) => { this.state.clienteWhatsapp = e.target.value; });
         }
         if (saveCb) {
-            saveCb.addEventListener('change', (e) => { this.state.guardarCliente = e.target.checked; });
+            saveCb.addEventListener('change', (e) => {
+                this.state.guardarCliente = e.target.checked;
+                // Persistir preferencia
+                this._saveCheckbox(e.target.checked);
+            });
         }
+    },
+
+    _validarCamposCliente(s) {
+        // Si se va a guardar como cliente nuevo, exigir Nombre + DNI + WhatsApp
+        if (s.guardarCliente) {
+            if (!s.clienteNombre || !s.clienteNombre.trim()) {
+                App.showToast('Por favor ingresa el nombre para guardar el cliente', 'error');
+                document.getElementById('cot-cliente-nombre')?.focus();
+                return false;
+            }
+            if (!s.clienteDni || !s.clienteDni.trim()) {
+                App.showToast('Por favor ingresa el DNI para guardar el cliente', 'error');
+                document.getElementById('cot-cliente-dni')?.focus();
+                return false;
+            }
+            if (!s.clienteWhatsapp || !s.clienteWhatsapp.trim()) {
+                App.showToast('Por favor ingresa el WhatsApp para guardar el cliente', 'error');
+                document.getElementById('cot-cliente-whatsapp')?.focus();
+                return false;
+            }
+        }
+        return true;
     },
 
     init() {
@@ -337,7 +373,8 @@ Pages.nuevaCotizacion = {
                 precioDiseno: firstDesign ? firstDesign.precio : 0,
                 extras: [], observaciones: '',
                 clienteNombre: '', clienteDni: '', clienteWhatsapp: '',
-                guardarCliente: true, editingId: null
+                guardarCliente: this._getSavedCheckbox(), // Restaurar preferencia guardada
+                editingId: null
             };
         }
 
@@ -416,23 +453,32 @@ Pages.nuevaCotizacion = {
         const nombre = s.clienteNombre ? s.clienteNombre.trim() : '';
         const whatsapp = s.clienteWhatsapp ? s.clienteWhatsapp.trim() : '';
 
-        // 1. Intentar encontrar por DNI si existe
         if (dni) {
             const existing = DB.getOne("SELECT id FROM clientes WHERE dni = ?", [dni]);
             if (existing) clienteId = existing.id;
         }
 
-        // 2. Si no hay DNI o no se encontró por DNI, intentar por nombre
         if (!clienteId && nombre) {
             const existing = DB.getOne("SELECT id FROM clientes WHERE nombre = ?", [nombre]);
             if (existing) clienteId = existing.id;
         }
 
-        // 3. Si no existe y se marcó "Guardar cliente", lo creamos
         if (!clienteId && s.guardarCliente && (dni || nombre)) {
             DB.run("INSERT INTO clientes (nombre, dni, whatsapp) VALUES (?,?,?)",
                 [nombre || 'Sin nombre', dni || null, whatsapp || null]);
-            clienteId = DB.getOne("SELECT last_insert_rowid() as id").id;
+            // Buscar el cliente recién insertado por DNI o nombre para mayor fiabilidad
+            if (dni) {
+                const inserted = DB.getOne("SELECT id FROM clientes WHERE dni = ?", [dni]);
+                if (inserted) clienteId = inserted.id;
+            }
+            if (!clienteId && nombre) {
+                const inserted = DB.getOne("SELECT id FROM clientes WHERE nombre = ? ORDER BY id DESC LIMIT 1", [nombre]);
+                if (inserted) clienteId = inserted.id;
+            }
+            if (!clienteId) {
+                const fallback = DB.getOne("SELECT MAX(id) as id FROM clientes");
+                clienteId = fallback ? fallback.id : null;
+            }
         }
 
         return clienteId;
@@ -442,45 +488,33 @@ Pages.nuevaCotizacion = {
         const s = this.state;
         const total = this.calcTotal();
 
-        // Validar si se va a guardar cliente
-        if (s.guardarCliente) {
-            if (!s.clienteDni || !s.clienteDni.trim()) {
-                App.showToast('Por favor ingresa el DNI para guardar el cliente', 'error');
-                document.getElementById('cot-cliente-dni')?.focus();
-                return;
-            }
-            if (!s.clienteNombre || !s.clienteNombre.trim()) {
-                App.showToast('Por favor ingresa el nombre para guardar el cliente', 'error');
-                document.getElementById('cot-cliente-nombre')?.focus();
-                return;
-            }
-        }
+        if (!this._validarCamposCliente(s)) return;
 
         const clienteId = this._resolverClienteId(s);
+        const usuario = App.currentUser;
 
         if (s.editingId) {
-            // MODO EDICIÓN: UPDATE
             DB.run(
                 `UPDATE cotizaciones SET cliente_id=?, cliente_nombre=?, tamano=?, precio_tamano=?,
                  sabor=?, precio_sabor=?, diseno=?, precio_diseno=?, extras=?, observaciones=?, total=?
                  WHERE id=?`,
                 [clienteId, s.clienteNombre || 'Sin nombre', s.tamano, s.precioTamano,
-                 s.sabor, s.precioSabor, s.diseno, s.precioDiseno,
-                 JSON.stringify(s.extras), s.observaciones, total, s.editingId]
+                    s.sabor, s.precioSabor, s.diseno, s.precioDiseno,
+                    JSON.stringify(s.extras), s.observaciones, total, s.editingId]
             );
             App.showToast('Cotización actualizada exitosamente', 'success');
         } else {
-            // MODO NUEVO: INSERT
             const count = DB.getOne("SELECT COUNT(*) as c FROM cotizaciones").c + 1;
             const cNameSafe = (s.clienteNombre || 'anonimo').toLowerCase().replace(/[^a-z0-9]/g, '-').replace(/-+/g, '-').substring(0, 15);
             const numero = `COT-${String(count).padStart(3, '0')}-${cNameSafe}`;
 
             DB.run(
-                `INSERT INTO cotizaciones (numero, cliente_id, cliente_nombre, tamano, precio_tamano, sabor, precio_sabor, diseno, precio_diseno, extras, observaciones, total, estado)
-                 VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+                `INSERT INTO cotizaciones (numero, cliente_id, cliente_nombre, tamano, precio_tamano, sabor, precio_sabor, diseno, precio_diseno, extras, observaciones, total, estado, usuario_id, usuario_nombre)
+                 VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
                 [numero, clienteId, s.clienteNombre || 'Sin nombre', s.tamano, s.precioTamano,
-                 s.sabor, s.precioSabor, s.diseno, s.precioDiseno,
-                 JSON.stringify(s.extras), s.observaciones, total, 'pendiente']
+                    s.sabor, s.precioSabor, s.diseno, s.precioDiseno,
+                    JSON.stringify(s.extras), s.observaciones, total, 'pendiente',
+                    usuario ? usuario.id : null, usuario ? usuario.nombre : null]
             );
             App.showToast(`Cotización ${numero} guardada exitosamente`, 'success');
         }
@@ -489,87 +523,76 @@ Pages.nuevaCotizacion = {
     },
 
     enviarWhatsApp() {
-        // Solo genera y abre el link. NO guarda, NO resetea.
+        // Mensaje amigable SIN precios individuales, sólo Precio Total al final
         const s = this.state;
         const total = this.calcTotal();
-        const config = DB.getConfig('whatsapp_mensaje') || "Hola! Tu cotizacion de Milena's Pasteleria:";
-        
-        let msg = `${config}\n\n`;
-        msg += `--- Cotizacion de Milena's Pasteleria ---\n\n`;
-        msg += `Tamano: ${s.tamano} porciones - ${App.formatCurrency(s.precioTamano)}\n`;
-        msg += `Sabor: ${s.sabor}`;
-        if (s.precioSabor > 0) msg += ` - ${App.formatCurrency(s.precioSabor)}`;
-        msg += `\n`;
-        msg += `Diseno: ${s.diseno}`;
-        if (s.precioDiseno > 0) msg += ` - ${App.formatCurrency(s.precioDiseno)}`;
-        msg += `\n`;
-        
+        const negocio = DB.getConfig('negocio_nombre') || "Milena's Pastelería";
+        const intro = DB.getConfig('whatsapp_mensaje') || `¡Hola! Te comparto la cotización de tu pastel de ${negocio}:`;
+
+        let extrasDesc = '';
         if (s.extras.length > 0) {
-            msg += `\nExtras:\n`;
-            s.extras.forEach(e => { msg += `  - ${e.nombre}: ${App.formatCurrency(e.precio)}\n`; });
+            extrasDesc = '\n✨ *Extras:* ' + s.extras.map(e => e.nombre).join(', ');
         }
-        msg += `\n*TOTAL: ${App.formatCurrency(total)}*`;
-        
-        if (s.observaciones) msg += `\n\nNota: ${s.observaciones}`;
+
+        let msg = `${intro}\n\n`;
+        msg += `🎂 *Pastel ${s.sabor}*\n`;
+        msg += `👥 Tamaño: *${s.tamano} porciones*\n`;
+        msg += `🎨 Diseño: *${s.diseno}*`;
+        msg += extrasDesc;
+        if (s.observaciones) {
+            msg += `\n📝 Nota: ${s.observaciones}`;
+        }
+        msg += `\n\n💰 *Precio Total: ${App.formatCurrency(total)}*`;
+        msg += `\n\n¡Gracias por elegirnos! 🥰`;
 
         const phone = s.clienteWhatsapp || '';
         const url = `https://wa.me/${phone}?text=${encodeURIComponent(msg)}`;
         window.open(url, '_blank');
-        // El formulario queda intacto
     },
 
     convertirPedido() {
-        // Primero pedimos la fecha de entrega
-        Pages.pedidos.pedirFechaYCrear((fecha, hora) => {
-            this._crearPedidoConFecha(fecha, hora);
+        Pages.pedidos.pedirFechaYCrear((fecha, hora, anticipo) => {
+            this._crearPedidoConFecha(fecha, hora, anticipo);
         });
     },
 
-    _crearPedidoConFecha(fechaEntrega, horaEntrega) {
+    _crearPedidoConFecha(fechaEntrega, horaEntrega, anticipo) {
         const s = this.state;
         const total = this.calcTotal();
 
-        // Validar si se va a guardar cliente
-        if (s.guardarCliente) {
-            if (!s.clienteDni || !s.clienteDni.trim()) {
-                App.showToast('Por favor ingresa el DNI para guardar el cliente', 'error');
-                document.getElementById('cot-cliente-dni')?.focus();
-                return;
-            }
-            if (!s.clienteNombre || !s.clienteNombre.trim()) {
-                App.showToast('Por favor ingresa el nombre para guardar el cliente', 'error');
-                document.getElementById('cot-cliente-nombre')?.focus();
-                return;
-            }
-        }
+        if (!this._validarCamposCliente(s)) return;
 
         const clienteId = this._resolverClienteId(s);
+        const usuario = App.currentUser;
 
         const countCot = DB.getOne("SELECT COUNT(*) as c FROM cotizaciones").c + 1;
         const countPed = DB.getOne("SELECT COUNT(*) as c FROM pedidos").c + 1;
         const cNameSafe = (s.clienteNombre || 'anonimo').toLowerCase().replace(/[^a-z0-9]/g, '-').replace(/-+/g, '-').substring(0, 15);
-        
+
         const numeroCot = `COT-${String(countCot).padStart(3, '0')}-${cNameSafe}`;
         const numeroPed = `PED-${String(countPed).padStart(3, '0')}-${cNameSafe}`;
 
+        const anticipoNum = parseFloat(anticipo) || 0;
+        const saldoPendiente = Math.max(0, total - anticipoNum);
+
         // Insertar cotización como aceptada
         DB.run(
-            `INSERT INTO cotizaciones (numero, cliente_id, cliente_nombre, tamano, precio_tamano, sabor, precio_sabor, diseno, precio_diseno, extras, observaciones, total, estado)
-             VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+            `INSERT INTO cotizaciones (numero, cliente_id, cliente_nombre, tamano, precio_tamano, sabor, precio_sabor, diseno, precio_diseno, extras, observaciones, total, estado, usuario_id, usuario_nombre)
+             VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
             [numeroCot, clienteId, s.clienteNombre || 'Sin nombre', s.tamano, s.precioTamano,
-             s.sabor, s.precioSabor, s.diseno, s.precioDiseno,
-             JSON.stringify(s.extras), s.observaciones, total, 'aceptada']
+                s.sabor, s.precioSabor, s.diseno, s.precioDiseno,
+                JSON.stringify(s.extras), s.observaciones, total, 'aceptada',
+                usuario ? usuario.id : null, usuario ? usuario.nombre : null]
         );
 
         const cot = DB.getOne("SELECT id FROM cotizaciones WHERE numero = ?", [numeroCot]);
-
         const desc = `Pastel ${s.sabor} ${s.tamano} porc. - ${s.diseno}`;
 
         DB.run(
-            `INSERT INTO pedidos (numero, cotizacion_id, cliente_id, cliente_nombre, descripcion, fecha_entrega, hora_entrega, estado, total, notas)
-             VALUES (?,?,?,?,?,?,?,?,?,?)`,
+            `INSERT INTO pedidos (numero, cotizacion_id, cliente_id, cliente_nombre, descripcion, fecha_entrega, hora_entrega, estado, total, anticipo, saldo_pendiente, notas)
+             VALUES (?,?,?,?,?,?,?,?,?,?,?,?)`,
             [numeroPed, cot ? cot.id : null, clienteId, s.clienteNombre || 'Sin nombre',
-             desc, fechaEntrega, horaEntrega, 'en_preparacion', total, s.observaciones]
+                desc, fechaEntrega, horaEntrega, 'en_preparacion', total, anticipoNum, saldoPendiente, s.observaciones]
         );
 
         App.showToast(`Pedido ${numeroPed} creado para el ${App.formatDate(fechaEntrega)}`, 'success');
@@ -584,7 +607,8 @@ Pages.nuevaCotizacion = {
             diseno: 'Básico', precioDiseno: 0,
             extras: [], observaciones: '',
             clienteNombre: '', clienteDni: '', clienteWhatsapp: '',
-            guardarCliente: true, editingId: null
+            guardarCliente: this._getSavedCheckbox(), // Restaurar preferencia al resetear
+            editingId: null
         };
         App.navigateTo('nueva-cotizacion');
     }
