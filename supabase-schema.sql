@@ -118,9 +118,19 @@ insert into public.catalogo (categoria, nombre, precio, descripcion, emoji) valu
   ('sabor', 'Red velvet', 25, '', ''),
   ('diseno', 'Basico', 0, '', ''),
   ('diseno', 'Personalizado', 60, '', ''),
-  ('decoracion', 'Topper', 25, '', ''),
-  ('fondant', 'Figura simple', 45, '', ''),
-  ('extras', 'Relleno extra', 30, '', '')
+  ('decoracion', 'Topper acrílico', 15, '', ''),
+  ('decoracion', 'Hoja de arroz impresa', 35, '', ''),
+  ('decoracion', 'Perlas', 10, '', ''),
+  ('decoracion', 'Flores de crema', 15, '', ''),
+  ('decoracion', 'Chispas de colores', 10, '', ''),
+  ('fondant', 'Pequeña (1 figura)', 30, '', ''),
+  ('fondant', 'Mediana (1 figura)', 50, '', ''),
+  ('fondant', 'Grande (1 figura)', 80, '', ''),
+  ('fondant', 'Figura adicional', 30, '', ''),
+  ('extras', 'Nombre personalizado', 10, '', ''),
+  ('extras', 'Número', 15, '', ''),
+  ('extras', 'Velas especiales', 10, '', ''),
+  ('extras', 'Entrega urgente', 30, '', '')
 on conflict do nothing;
 
 delete from public.configuracion where clave = 'negocio_email';
