@@ -17,17 +17,22 @@ const App = {
             // Initialize database
             await DB.init();
 
-            // Hide loading, show app
+            // Hide loading
             document.getElementById('loading-screen').style.display = 'none';
-            document.getElementById('app').style.display = 'flex';
 
             // Initialize lucide icons
             if (window.lucide) lucide.createIcons();
 
-            // Check session
-            const session = localStorage.getItem('milenas_session');
+            // Check local app session
+            const session = await DB.getSession();
             if (session) {
-                this.currentUser = JSON.parse(session);
+                await DB.loadAuthenticatedData();
+                this.currentUser = DB.getUserProfile(session.user);
+                if (!this.currentUser || Number(this.currentUser.activo) !== 1) {
+                    await DB.signOut();
+                    this.showLogin();
+                    return;
+                }
                 this.updateUIForRole();
                 document.getElementById('app').style.display = 'flex';
                 // Setup and Navigate
@@ -37,9 +42,7 @@ const App = {
                 const hash = window.location.hash.slice(1) || 'nueva-cotizacion';
                 this.navigateTo(hash);
             } else {
-                // Show login
-                document.getElementById('login-screen').style.display = 'flex';
-                this.setupLogin();
+                this.showLogin();
             }
         } catch (err) {
             console.error('Error initializing app:', err);
@@ -52,7 +55,15 @@ const App = {
         }
     },
 
+    showLogin() {
+        document.getElementById('app').style.display = 'none';
+        document.getElementById('login-screen').style.display = 'flex';
+        this.setupLogin();
+    },
+
     setupRouter() {
+        if (this.routerBound) return;
+        this.routerBound = true;
         window.addEventListener('hashchange', () => {
             if (!this.currentUser) return;
             const page = window.location.hash.slice(1) || 'nueva-cotizacion';
@@ -62,16 +73,23 @@ const App = {
 
     setupLogin() {
         const form = document.getElementById('login-form');
-        form.addEventListener('submit', (e) => {
+        if (form.dataset.bound === 'true') return;
+        form.dataset.bound = 'true';
+        form.addEventListener('submit', async (e) => {
             e.preventDefault();
             const user = document.getElementById('login-usuario').value.trim();
             const pass = document.getElementById('login-password').value.trim();
+            const remember = document.getElementById('login-remember')?.checked || false;
+            const submit = form.querySelector('button[type="submit"]');
+            const originalText = submit ? submit.textContent : '';
 
-            const dbUser = DB.getOne("SELECT * FROM usuarios WHERE usuario = ? AND password = ? AND activo = 1", [user, pass]);
-
-            if (dbUser) {
+            try {
+                if (submit) {
+                    submit.disabled = true;
+                    submit.textContent = 'Ingresando...';
+                }
+                const dbUser = await DB.signIn(user, pass, remember);
                 this.currentUser = dbUser;
-                localStorage.setItem('milenas_session', JSON.stringify(dbUser));
                 document.getElementById('login-error').style.display = 'none';
                 document.getElementById('login-screen').style.display = 'none';
                 document.getElementById('app').style.display = 'flex';
@@ -86,8 +104,14 @@ const App = {
                 this.navigateTo(hash);
 
                 this.showToast(`Bienvenido ${dbUser.nombre}`, 'success');
-            } else {
+            } catch (err) {
+                console.error('Login error:', err);
                 document.getElementById('login-error').style.display = 'block';
+            } finally {
+                if (submit) {
+                    submit.disabled = false;
+                    submit.textContent = originalText;
+                }
             }
         });
     },
@@ -110,6 +134,8 @@ const App = {
 
     setupSidebar() {
         document.querySelectorAll('.nav-item[data-page]').forEach(item => {
+            if (item.dataset.bound === 'true') return;
+            item.dataset.bound = 'true';
             item.addEventListener('click', (e) => {
                 e.preventDefault();
                 const page = item.dataset.page;
@@ -118,10 +144,13 @@ const App = {
         });
 
         // Logout button
-        document.getElementById('btn-logout').addEventListener('click', (e) => {
+        const logout = document.getElementById('btn-logout');
+        if (logout.dataset.bound === 'true') return;
+        logout.dataset.bound = 'true';
+        logout.addEventListener('click', async (e) => {
             e.preventDefault();
             this.currentUser = null;
-            localStorage.removeItem('milenas_session');
+            await DB.signOut();
             document.getElementById('app').style.display = 'none';
             document.getElementById('login-screen').style.display = 'flex';
 
@@ -135,7 +164,10 @@ const App = {
 
     setupHeader() {
         // Notifications button
-        document.getElementById('btn-notifications').addEventListener('click', () => {
+        const notifications = document.getElementById('btn-notifications');
+        if (notifications.dataset.bound !== 'true') {
+            notifications.dataset.bound = 'true';
+            notifications.addEventListener('click', () => {
             const target = new Date();
             target.setDate(target.getDate() + 2);
             const limitStr = target.toISOString().split('T')[0];
@@ -167,7 +199,8 @@ const App = {
                 body += `</div>`;
                 this.showModal('🔔 Notificaciones', body, `<button class="btn btn-outline" onclick="App.closeModal()">Cerrar</button>`);
             }
-        });
+            });
+        }
 
         // Update notification count
         this.updateNotifications();
@@ -316,18 +349,38 @@ const App = {
     // Status label mapping
     statusLabel(status) {
         const labels = {
-            'pendiente': 'Pendiente',
-            'enviada': 'Enviada',
-            'aceptada': 'Aceptada',
-            'rechazada': 'Rechazada',
+            'pendiente': 'Nueva',
+            'enviada': 'En seguimiento',
+            'aceptada': 'Cerrada (venta)',
+            'rechazada': 'Perdida',
+            'Nueva': 'Nueva',
+            'En seguimiento': 'En seguimiento',
+            'Cerrada (venta)': 'Cerrada (venta)',
+            'Perdida': 'Perdida',
             'en_preparacion': 'En preparación',
             'listo': 'Listo',
             'entregado': 'Entregado',
             'cancelado': 'Cancelado'
         };
         return labels[status] || status;
+    },
+
+    statusClass(status) {
+        const classes = {
+            'pendiente': 'nueva',
+            'enviada': 'en-seguimiento',
+            'aceptada': 'cerrada-venta',
+            'rechazada': 'perdida',
+            'Nueva': 'nueva',
+            'En seguimiento': 'en-seguimiento',
+            'Cerrada (venta)': 'cerrada-venta',
+            'Perdida': 'perdida'
+        };
+        return classes[status] || String(status || '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
     }
 };
+
+window.App = App;
 
 // Initialize app when DOM ready
 document.addEventListener('DOMContentLoaded', () => App.init());

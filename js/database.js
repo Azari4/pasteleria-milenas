@@ -1,360 +1,461 @@
 /* =============================================
-   DATABASE — sql.js (SQLite en WebAssembly)
+   DATABASE - Supabase + SQL cache
    ============================================= */
-window.DB = {
+
+const SUPABASE_URL = window.MILENAS_SUPABASE_URL || 'https://vtyvdbgywecrreeogeop.supabase.co';
+const SUPABASE_KEY = window.MILENAS_SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZ0eXZkYmd5d2VjcnJlZW9nZW9wIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzg5NTYwNjEsImV4cCI6MjA5NDUzMjA2MX0.6pDmjXlA2dkWXB2eOQTdHD9sdvleExzAhvdiFxTXA3E';
+
+const COTIZACION_ESTADOS = {
+    NUEVA: 'Nueva',
+    SEGUIMIENTO: 'En seguimiento',
+    CERRADA: 'Cerrada (venta)',
+    PERDIDA: 'Perdida'
+};
+
+window.COTIZACION_ESTADOS = COTIZACION_ESTADOS;
+
+const DB = {
     db: null,
+    client: null,
+    realtimeChannel: null,
+    ready: false,
+    tables: ['configuracion', 'usuarios', 'catalogo', 'clientes', 'cotizaciones', 'pedidos'],
 
     async init() {
         const SQL = await initSqlJs({
             locateFile: file => `https://cdnjs.cloudflare.com/ajax/libs/sql.js/1.10.3/${file}`
         });
 
-        const saved = localStorage.getItem('milenas_v3_db');
-        if (saved) {
-            try {
-                const buf = Uint8Array.from(atob(saved), c => c.charCodeAt(0));
-                this.db = new SQL.Database(buf);
-                // Migraciones para bases de datos existentes
-                this._runMigrations();
-            } catch (e) {
-                console.warn('BD corrupta, recreando...', e);
-                localStorage.removeItem('milenas_v3_db');
-                this.db = new SQL.Database();
-                this.createSchema();
-                this.seedData();
-                this.save();
-            }
+        this.db = new SQL.Database();
+        this.createSchema();
+
+        if (this.hasSupabaseConfig()) {
+            this.client = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY, {
+                auth: {
+                    persistSession: false,
+                    autoRefreshToken: false,
+                    detectSessionInUrl: false
+                },
+                realtime: {
+                    params: { eventsPerSecond: 10 }
+                }
+            });
+            await this.loadFromSupabase();
+            this.setupRealtime();
         } else {
-            this.db = new SQL.Database();
-            this.createSchema();
-            this.seedData();
-            this.save();
+            console.warn('Supabase no configurado. Se cargan datos de ejemplo solo en memoria.');
+            this.seedDemoData();
         }
+
+        this.migrateCotizacionEstados();
+        this.ready = true;
         return this.db;
     },
 
-    _runMigrations() {
-        // Migración 1: columnas anticipo y saldo_pendiente en pedidos
-        try {
-            this.db.run("ALTER TABLE pedidos ADD COLUMN anticipo REAL DEFAULT 0");
-        } catch (e) { /* ya existe */ }
-        try {
-            this.db.run("ALTER TABLE pedidos ADD COLUMN saldo_pendiente REAL DEFAULT 0");
-        } catch (e) { /* ya existe */ }
-        // Migración 2: columna usuario_id en cotizaciones
-        try {
-            this.db.run("ALTER TABLE cotizaciones ADD COLUMN usuario_id INTEGER");
-        } catch (e) { /* ya existe */ }
-        try {
-            this.db.run("ALTER TABLE cotizaciones ADD COLUMN usuario_nombre TEXT");
-        } catch (e) { /* ya existe */ }
-        this.save();
-    },
-
-    save() {
-        try {
-            const data = this.db.export();
-            let binary = '';
-            const chunkSize = 8192;
-            for (let i = 0; i < data.length; i += chunkSize) {
-                binary += String.fromCharCode.apply(null, data.subarray(i, i + chunkSize));
-            }
-            const b64 = btoa(binary);
-            localStorage.setItem('milenas_v3_db', b64);
-        } catch (e) {
-            console.warn('No se pudo guardar en localStorage:', e);
-        }
-    },
-
-    exec(sql, params = []) {
-        const result = this.db.exec(sql, params);
-        return result;
-    },
-
-    run(sql, params = []) {
-        this.db.run(sql, params);
-        this.save();
-    },
-
-    getAll(sql, params = []) {
-        const stmt = this.db.prepare(sql);
-        if (params.length) stmt.bind(params);
-        const rows = [];
-        while (stmt.step()) {
-            rows.push(stmt.getAsObject());
-        }
-        stmt.free();
-        return rows;
-    },
-
-    getOne(sql, params = []) {
-        const rows = this.getAll(sql, params);
-        return rows.length > 0 ? rows[0] : null;
+    hasSupabaseConfig() {
+        return window.supabase &&
+            SUPABASE_URL &&
+            SUPABASE_KEY &&
+            !SUPABASE_URL.includes('TU-PROYECTO') &&
+            !SUPABASE_KEY.includes('TU-ANON-KEY');
     },
 
     createSchema() {
         this.db.run(`
-            CREATE TABLE IF NOT EXISTS clientes (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
+            CREATE TABLE IF NOT EXISTS configuracion (
+                clave TEXT PRIMARY KEY,
+                valor TEXT
+            );
+            CREATE TABLE IF NOT EXISTS usuarios (
+                id TEXT PRIMARY KEY,
                 nombre TEXT NOT NULL,
-                dni TEXT,
-                whatsapp TEXT,
-                email TEXT,
+                usuario TEXT UNIQUE,
+                password TEXT NOT NULL DEFAULT '',
+                rol TEXT NOT NULL DEFAULT 'vendedor',
+                activo INTEGER DEFAULT 1,
+                created_at TEXT DEFAULT CURRENT_TIMESTAMP
+            );
+            CREATE TABLE IF NOT EXISTS catalogo (
+                id INTEGER PRIMARY KEY,
+                categoria TEXT NOT NULL,
+                nombre TEXT NOT NULL,
+                precio REAL DEFAULT 0,
+                descripcion TEXT,
+                emoji TEXT,
+                activo INTEGER DEFAULT 1,
+                created_at TEXT DEFAULT CURRENT_TIMESTAMP
+            );
+            CREATE TABLE IF NOT EXISTS clientes (
+                id INTEGER PRIMARY KEY,
+                nombre TEXT NOT NULL,
+                whatsapp TEXT NOT NULL UNIQUE,
                 direccion TEXT,
                 notas TEXT,
-                created_at TEXT DEFAULT (datetime('now','localtime'))
+                created_at TEXT DEFAULT CURRENT_TIMESTAMP
             );
-        `);
-
-        this.db.run(`
-            CREATE TABLE IF NOT EXISTS usuarios (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                nombre TEXT NOT NULL,
-                usuario TEXT UNIQUE NOT NULL,
-                password TEXT NOT NULL,
-                rol TEXT NOT NULL,
-                activo INTEGER DEFAULT 1,
-                created_at TEXT DEFAULT (datetime('now','localtime'))
-            );
-        `);
-
-        this.db.run(`
             CREATE TABLE IF NOT EXISTS cotizaciones (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                numero TEXT UNIQUE NOT NULL,
+                id INTEGER PRIMARY KEY,
+                numero TEXT NOT NULL,
                 cliente_id INTEGER,
                 cliente_nombre TEXT,
-                tamano INTEGER NOT NULL,
-                precio_tamano REAL NOT NULL,
-                sabor TEXT NOT NULL,
+                cliente_whatsapp TEXT,
+                tamano INTEGER,
+                precio_tamano REAL DEFAULT 0,
+                sabor TEXT,
                 precio_sabor REAL DEFAULT 0,
-                diseno TEXT NOT NULL,
+                diseno TEXT,
                 precio_diseno REAL DEFAULT 0,
-                extras TEXT DEFAULT '[]',
+                extras TEXT,
                 observaciones TEXT,
-                total REAL NOT NULL,
-                estado TEXT DEFAULT 'pendiente',
-                usuario_id INTEGER,
+                total REAL DEFAULT 0,
+                estado TEXT DEFAULT 'Nueva',
+                usuario_id TEXT,
                 usuario_nombre TEXT,
-                created_at TEXT DEFAULT (datetime('now','localtime')),
-                FOREIGN KEY (cliente_id) REFERENCES clientes(id),
-                FOREIGN KEY (usuario_id) REFERENCES usuarios(id)
+                created_at TEXT DEFAULT CURRENT_TIMESTAMP
             );
-        `);
-
-        this.db.run(`
             CREATE TABLE IF NOT EXISTS pedidos (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                numero TEXT UNIQUE NOT NULL,
+                id INTEGER PRIMARY KEY,
+                numero TEXT NOT NULL,
                 cotizacion_id INTEGER,
                 cliente_id INTEGER,
                 cliente_nombre TEXT,
+                cliente_whatsapp TEXT,
                 descripcion TEXT,
                 fecha_entrega TEXT,
                 hora_entrega TEXT,
                 estado TEXT DEFAULT 'en_preparacion',
-                total REAL NOT NULL,
+                total REAL DEFAULT 0,
                 anticipo REAL DEFAULT 0,
                 saldo_pendiente REAL DEFAULT 0,
                 notas TEXT,
-                created_at TEXT DEFAULT (datetime('now','localtime')),
-                FOREIGN KEY (cotizacion_id) REFERENCES cotizaciones(id),
-                FOREIGN KEY (cliente_id) REFERENCES clientes(id)
-            );
-        `);
-
-        this.db.run(`
-            CREATE TABLE IF NOT EXISTS catalogo (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                categoria TEXT NOT NULL,
-                nombre TEXT NOT NULL,
-                precio REAL NOT NULL,
-                descripcion TEXT,
-                emoji TEXT DEFAULT '🎂',
-                activo INTEGER DEFAULT 1
-            );
-        `);
-
-        this.db.run(`
-            CREATE TABLE IF NOT EXISTS configuracion (
-                clave TEXT PRIMARY KEY,
-                valor TEXT NOT NULL
+                created_at TEXT DEFAULT CURRENT_TIMESTAMP
             );
         `);
     },
 
-    seedData() {
-        // === CLIENTES ===
-        const clientes = [
-            ["María García López", "1234567-8", "5551234001", "maria.garcia@email.com", "Zona 10, Ciudad de Guatemala", "Cliente frecuente, prefiere chocolate"],
-            ["Carlos Hernández", "2345678-9", "5551234002", "carlos.h@email.com", "Zona 14, Ciudad de Guatemala", ""],
-            ["Ana Sofía López", "3456789-0", "5551234003", "ana.lopez@email.com", "Mixco, Guatemala", "Alérgica a nueces"],
-            ["Roberto Martínez", "4567890-1", "5551234004", "rob.martinez@email.com", "Zona 15, Ciudad de Guatemala", ""],
-            ["Valentina Castillo", "5678901-2", "5551234005", "vale.castillo@email.com", "Antigua Guatemala", "Prefiere diseños temáticos"],
-            ["Diego Morales Pérez", "6789012-3", "5551234006", "diego.m@email.com", "Zona 1, Ciudad de Guatemala", ""],
-            ["Luisa Fernanda Ramírez", "7890123-4", "5551234007", "luisa.r@email.com", "Zona 7, Ciudad de Guatemala", "Corporativa - Empresa ABC"],
-            ["Fernando Pérez", "8901234-5", "5551234008", "fernando.p@email.com", "Villa Nueva, Guatemala", ""]
-        ];
-        clientes.forEach(c => {
-            this.db.run(
-                "INSERT INTO clientes (nombre, dni, whatsapp, email, direccion, notas) VALUES (?,?,?,?,?,?)", c
-            );
-        });
+    async getSession() {
+        const userId = localStorage.getItem('milenas_session_user_id') || sessionStorage.getItem('milenas_session_user_id');
+        if (!userId) return null;
+        const user = this.getOne("SELECT * FROM usuarios WHERE id = ? AND activo = 1", [userId]);
+        return user ? { user } : null;
+    },
 
-        // === USUARIOS ===
-        const usuarios = [
-            ["Administrador General", "admin", "admin123", "admin"],
-            ["Ana Martínez", "vendedor", "vend123", "vendedor"],
-            ["Carlos Decorador", "carlos", "dec123", "decorador"],
-            ["Luis Pastelero", "luis", "pas123", "pastelero"]
-        ];
-        usuarios.forEach(u => {
-            this.db.run(
-                "INSERT INTO usuarios (nombre, usuario, password, rol) VALUES (?,?,?,?)", u
-            );
-        });
+    async signIn(login, password, remember = false) {
+        if (this.client) {
+            await this.loadFromSupabase();
+        }
 
-        // === COTIZACIONES (con usuario_id asignado) ===
-        const cotizaciones = [
-            ["COT-001", 1, "María García López", 10, 120, "Vainilla", 0, "Básico", 0,
-                JSON.stringify([{ nombre: "Hoja de arroz impresa", precio: 35 }, { nombre: "Perlas", precio: 10 }, { nombre: "Figura fondant pequeña", precio: 30 }, { nombre: "Nombre personalizado", precio: 10 }]),
-                "Pastel para cumpleaños de Sofía, 5 años", 205, "aceptada", 2, "Ana Martínez", "2026-04-20 10:30:00"],
-            ["COT-002", 2, "Carlos Hernández", 20, 180, "Chocolate", 0, "Personalizado", 30,
-                JSON.stringify([{ nombre: "Topper acrílico", precio: 15 }, { nombre: "Velas especiales", precio: 10 }]),
-                "Aniversario de bodas", 235, "pendiente", 2, "Ana Martínez", "2026-04-22 14:15:00"],
-            ["COT-003", 3, "Ana Sofía López", 15, 150, "Red Velvet", 20, "Temático", 50,
-                JSON.stringify([{ nombre: "Flores de crema", precio: 15 }, { nombre: "Figura fondant mediana", precio: 50 }, { nombre: "Nombre personalizado", precio: 10 }]),
-                "Baby shower, tema: unicornios", 295, "enviada", 1, "Administrador General", "2026-04-23 09:00:00"],
-            ["COT-004", 5, "Valentina Castillo", 30, 230, "Tres leches", 20, "Temático", 50,
-                JSON.stringify([{ nombre: "Hoja de arroz impresa", precio: 35 }, { nombre: "Figura fondant grande", precio: 80 }, { nombre: "Perlas", precio: 10 }, { nombre: "Entrega urgente", precio: 30 }]),
-                "Fiesta de XV años, tema: Cenicienta", 455, "aceptada", 2, "Ana Martínez", "2026-04-18 11:00:00"],
-            ["COT-005", 4, "Roberto Martínez", 10, 120, "Marmoleado", 0, "Básico", 0,
-                JSON.stringify([{ nombre: "Chispas de colores", precio: 10 }, { nombre: "Número", precio: 15 }]),
-                "", 145, "rechazada", 1, "Administrador General", "2026-04-15 16:30:00"],
-            ["COT-006", 6, "Diego Morales Pérez", 50, 320, "Chocolate", 0, "Personalizado", 30,
-                JSON.stringify([{ nombre: "Hoja de arroz impresa", precio: 35 }, { nombre: "Perlas", precio: 10 }, { nombre: "Flores de crema", precio: 15 }, { nombre: "Figura fondant mediana", precio: 50 }, { nombre: "Nombre personalizado", precio: 10 }]),
-                "Graduación universitaria USAC", 470, "aceptada", 2, "Ana Martínez", "2026-04-19 08:00:00"],
-            ["COT-007", 7, "Luisa Fernanda Ramírez", 20, 180, "Vainilla", 0, "Personalizado", 30,
-                JSON.stringify([{ nombre: "Topper acrílico", precio: 15 }, { nombre: "Nombre personalizado", precio: 10 }]),
-                "Evento corporativo Empresa ABC", 235, "enviada", 1, "Administrador General", "2026-04-24 10:00:00"],
-            ["COT-008", 1, "María García López", 15, 150, "Chocolate", 0, "Temático", 50,
-                JSON.stringify([{ nombre: "Figura fondant pequeña", precio: 30 }, { nombre: "Nombre personalizado", precio: 10 }, { nombre: "Velas especiales", precio: 10 }]),
-                "Cumpleaños de Daniela", 250, "pendiente", 2, "Ana Martínez", "2026-04-25 15:00:00"],
-            ["COT-009", 8, "Fernando Pérez", 10, 120, "Vainilla", 0, "Básico", 0,
-                JSON.stringify([]), "", 120, "pendiente", 1, "Administrador General", "2026-04-25 17:30:00"],
-            ["COT-010", 3, "Ana Sofía López", 20, 180, "Tres leches", 20, "Personalizado", 30,
-                JSON.stringify([{ nombre: "Perlas", precio: 10 }, { nombre: "Flores de crema", precio: 15 }]),
-                "Cumpleaños de mamá", 255, "aceptada", 2, "Ana Martínez", "2026-04-16 09:30:00"],
-            ["COT-011", 5, "Valentina Castillo", 15, 150, "Marmoleado", 0, "Básico", 0,
-                JSON.stringify([{ nombre: "Chispas de colores", precio: 10 }]),
-                "Pedido pequeño para reunión", 160, "aceptada", 1, "Administrador General", "2026-04-21 13:00:00"],
-            ["COT-012", 2, "Carlos Hernández", 30, 230, "Red Velvet", 20, "Temático", 50,
-                JSON.stringify([{ nombre: "Hoja de arroz impresa", precio: 35 }, { nombre: "Figura fondant grande", precio: 80 }, { nombre: "Entrega urgente", precio: 30 }]),
-                "Fiesta sorpresa para esposa", 445, "pendiente", 2, "Ana Martínez", "2026-04-26 10:00:00"]
-        ];
-        cotizaciones.forEach(c => {
-            this.db.run(
-                `INSERT INTO cotizaciones (numero, cliente_id, cliente_nombre, tamano, precio_tamano, sabor, precio_sabor, diseno, precio_diseno, extras, observaciones, total, estado, usuario_id, usuario_nombre, created_at) 
-                 VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`, c
-            );
-        });
+        const normalized = login.trim().toLowerCase();
+        const user = this.getOne(
+            "SELECT * FROM usuarios WHERE activo = 1 AND password = ? AND lower(usuario) = ? LIMIT 1",
+            [password, normalized]
+        );
 
-        // === PEDIDOS (con anticipo y saldo_pendiente) ===
-        const hoy = new Date();
-        const sumarDias = (dias) => {
-            const d = new Date(hoy);
-            d.setDate(d.getDate() + dias);
-            return d.toISOString().split('T')[0];
+        if (!user) throw new Error('Usuario o contrasena incorrectos');
+        localStorage.removeItem('milenas_session_user_id');
+        sessionStorage.removeItem('milenas_session_user_id');
+        const storage = remember ? localStorage : sessionStorage;
+        storage.setItem('milenas_session_user_id', user.id);
+        return this.getUserProfile(user);
+    },
+
+    async signOut() {
+        localStorage.removeItem('milenas_session_user_id');
+        sessionStorage.removeItem('milenas_session_user_id');
+        if (this.realtimeChannel) {
+            this.client.removeChannel(this.realtimeChannel);
+            this.realtimeChannel = null;
+        }
+    },
+
+    getUserProfile(user) {
+        if (!user) return null;
+        return {
+            ...user,
+            usuario: user.usuario
         };
-        const pedidos = [
-            ["PED-001", 1, 1, "María García López", "Pastel Vainilla 10 porc. - Básico - Cumpleaños Sofía", sumarDias(1), "14:00", "en_preparacion", 205, 100, 105, "Decorar con tema princesas", sumarDias(-5) + " 11:00:00"],
-            ["PED-002", 4, 5, "Valentina Castillo", "Pastel Tres Leches 30 porc. - Temático Cenicienta - XV años", sumarDias(2), "10:00", "en_preparacion", 455, 200, 255, "Incluye castillo de fondant", sumarDias(-4) + " 12:00:00"],
-            ["PED-003", 6, 6, "Diego Morales Pérez", "Pastel Chocolate 50 porc. - Personalizado - Graduación USAC", sumarDias(5), "16:00", "en_preparacion", 470, 0, 470, "Logo USAC en hoja de arroz", sumarDias(-3) + " 09:00:00"],
-            ["PED-004", 10, 3, "Ana Sofía López", "Pastel Tres Leches 20 porc. - Personalizado - Cumpleaños mamá", sumarDias(0), "12:00", "listo", 255, 255, 0, "", sumarDias(-6) + " 10:00:00"],
-            ["PED-005", 11, 5, "Valentina Castillo", "Pastel Marmoleado 15 porc. - Básico - Reunión", sumarDias(-1), "09:00", "entregado", 160, 160, 0, "Entregado en Antigua", sumarDias(-7) + " 14:00:00"],
-            ["PED-006", null, 7, "Luisa Fernanda Ramírez", "Pastel Vainilla 20 porc. - Personalizado - Evento corporativo", sumarDias(7), "08:00", "en_preparacion", 235, 0, 235, "Necesita factura", sumarDias(-2) + " 11:00:00"]
-        ];
-        pedidos.forEach(p => {
-            this.db.run(
-                `INSERT INTO pedidos (numero, cotizacion_id, cliente_id, cliente_nombre, descripcion, fecha_entrega, hora_entrega, estado, total, anticipo, saldo_pendiente, notas, created_at)
-                 VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)`, p
+    },
+
+    async loadAuthenticatedData() {
+        if (!this.client) return;
+        await this.loadFromSupabase();
+        this.migrateCotizacionEstados();
+        this.setupRealtime();
+    },
+
+    async loadFromSupabase() {
+        for (const table of this.tables) {
+            const { data, error } = await this.client.from(table).select('*');
+            if (error) {
+                console.error(`No se pudo cargar ${table}:`, error.message);
+                continue;
+            }
+            this.replaceTable(table, data || []);
+        }
+
+        const users = this.getAll("SELECT * FROM usuarios");
+        if (!users.length) console.warn('No hay perfiles visibles para el usuario autenticado.');
+    },
+
+    replaceTable(table, rows) {
+        this.db.run(`DELETE FROM ${table}`);
+        rows.forEach(row => this.insertLocal(table, row, true));
+    },
+
+    setupRealtime() {
+        if (!this.client || this.realtimeChannel) return;
+        this.realtimeChannel = this.client.channel('milenas-realtime');
+        this.tables.forEach(table => {
+            this.realtimeChannel.on(
+                'postgres_changes',
+                { event: '*', schema: 'public', table },
+                payload => this.handleRealtime(table, payload)
             );
         });
-
-        // === CATÁLOGO ===
-        const catalogo = [
-            ["tamano", "10 porciones", 120, "Pastel para 10 personas", "🎂", 1],
-            ["tamano", "15 porciones", 150, "Pastel para 15 personas", "🎂", 1],
-            ["tamano", "20 porciones", 180, "Pastel para 20 personas", "🎂", 1],
-            ["tamano", "30 porciones", 230, "Pastel para 30 personas", "🎂", 1],
-            ["tamano", "50 porciones", 320, "Pastel para 50 personas", "🎂", 1],
-            ["sabor", "Vainilla", 0, "Sabor clásico de vainilla", "🍦", 1],
-            ["sabor", "Chocolate", 0, "Rico chocolate belga", "🍫", 1],
-            ["sabor", "Marmoleado", 0, "Mezcla de vainilla y chocolate", "🍰", 1],
-            ["sabor", "Tres leches", 20, "Suave pastel de tres leches", "🥛", 1],
-            ["sabor", "Red Velvet", 20, "Elegante red velvet con frosting", "🔴", 1],
-            ["diseno", "Básico", 0, "Decoración básica incluida", "⭐", 1],
-            ["diseno", "Personalizado", 30, "Diseño personalizado a tu gusto", "🎨", 1],
-            ["diseno", "Temático", 50, "Diseño con temática especial", "🎭", 1],
-            ["decoracion", "Hoja de arroz impresa", 35, "Imagen comestible impresa", "🖼️", 1],
-            ["decoracion", "Perlas", 10, "Perlas de azúcar decorativas", "✨", 1],
-            ["decoracion", "Flores de crema", 15, "Flores de crema batida", "🌸", 1],
-            ["decoracion", "Topper acrílico", 15, "Topper personalizado en acrílico", "🏷️", 1],
-            ["decoracion", "Chispas de colores", 10, "Chispas de azúcar multicolor", "🌈", 1],
-            ["fondant", "Pequeña (1 figura)", 30, "Figura de fondant pequeña", "🧁", 1],
-            ["fondant", "Mediana (1 figura)", 50, "Figura de fondant mediana", "🎀", 1],
-            ["fondant", "Grande (1 figura)", 80, "Figura de fondant grande detallada", "👑", 1],
-            ["fondant", "Figura adicional", 30, "Cada figura adicional", "➕", 1],
-            ["extras", "Nombre personalizado", 10, "Nombre del homenajeado en el pastel", "📝", 1],
-            ["extras", "Número", 15, "Número decorativo de edad", "🔢", 1],
-            ["extras", "Velas especiales", 10, "Juego de velas especiales", "🕯️", 1],
-            ["extras", "Entrega urgente", 30, "Entrega en menos de 24 horas", "🚀", 1]
-        ];
-        catalogo.forEach(c => {
-            this.db.run(
-                "INSERT INTO catalogo (categoria, nombre, precio, descripcion, emoji, activo) VALUES (?,?,?,?,?,?)", c
-            );
-        });
-
-        // === CONFIGURACIÓN ===
-        const config = [
-            ["negocio_nombre", "Milena's"],
-            ["negocio_subtitulo", "Pastelería"],
-            ["negocio_whatsapp", "50212345678"],
-            ["negocio_email", "info@dulcearte.com"],
-            ["negocio_direccion", "Zona 10, Ciudad de Guatemala"],
-            ["moneda_simbolo", "Q."],
-            ["moneda_nombre", "Quetzales"],
-            ["whatsapp_mensaje", "¡Hola! Te envío la cotización de tu pastel de Milena's Pastelería:"]
-        ];
-        config.forEach(c => {
-            this.db.run(
-                "INSERT INTO configuracion (clave, valor) VALUES (?,?)", c
-            );
+        this.realtimeChannel.subscribe(status => {
+            if (status === 'CHANNEL_ERROR') {
+                console.error('No se pudo conectar realtime. Revisa RLS y la publicacion supabase_realtime.');
+            }
         });
     },
 
-    // Helper: Get config value
+    handleRealtime(table, payload) {
+        if (payload.eventType === 'DELETE') {
+            this.db.run(`DELETE FROM ${table} WHERE id = ?`, [payload.old.id]);
+        } else {
+            this.deleteLocalById(table, payload.new.id);
+            this.insertLocal(table, payload.new, true);
+            if (table === 'cotizaciones') this.migrateCotizacionEstados();
+        }
+        this.refreshCurrentPage(table);
+    },
+
+    refreshCurrentPage(table) {
+        if (!window.App || !App.currentPage) return;
+        if (App.currentPage === 'configuracion' && window.Pages?.configuracion?.handleDataRefresh) {
+            Pages.configuracion.handleDataRefresh(table);
+            return;
+        }
+        const pageTables = {
+            'nueva-cotizacion': ['catalogo', 'clientes', 'configuracion'],
+            'cotizaciones': ['cotizaciones', 'clientes', 'pedidos'],
+            'pedidos': ['pedidos', 'cotizaciones', 'clientes'],
+            'clientes': ['clientes', 'cotizaciones', 'pedidos'],
+            'reportes': ['cotizaciones', 'pedidos'],
+            'configuracion': ['configuracion', 'catalogo', 'usuarios']
+        };
+        if ((pageTables[App.currentPage] || []).includes(table)) {
+            App.navigateTo(App.currentPage);
+        }
+    },
+
+    migrateCotizacionEstados() {
+        const replacements = {
+            pendiente: COTIZACION_ESTADOS.NUEVA,
+            enviada: COTIZACION_ESTADOS.SEGUIMIENTO,
+            aceptada: COTIZACION_ESTADOS.CERRADA,
+            rechazada: COTIZACION_ESTADOS.PERDIDA
+        };
+        Object.entries(replacements).forEach(([oldValue, newValue]) => {
+            this.db.run("UPDATE cotizaciones SET estado = ? WHERE estado = ?", [newValue, oldValue]);
+            if (this.client) {
+                this.client.from('cotizaciones').update({ estado: newValue }).eq('estado', oldValue);
+            }
+        });
+    },
+
+    getAll(sql, params = []) {
+        try {
+            const stmt = this.db.prepare(sql);
+            stmt.bind(params);
+            const rows = [];
+            while (stmt.step()) rows.push(stmt.getAsObject());
+            stmt.free();
+            return rows;
+        } catch (err) {
+            console.error('DB.getAll error:', err, sql, params);
+            return [];
+        }
+    },
+
+    getOne(sql, params = []) {
+        return this.getAll(sql, params)[0] || null;
+    },
+
     getConfig(key) {
         const row = this.getOne("SELECT valor FROM configuracion WHERE clave = ?", [key]);
         return row ? row.valor : null;
     },
 
-    // Helper: Set config value
     setConfig(key, value) {
-        this.run("INSERT OR REPLACE INTO configuracion (clave, valor) VALUES (?,?)", [key, value]);
+        this.db.run(
+            "INSERT OR REPLACE INTO configuracion (clave, valor) VALUES (?, ?)",
+            [key, value]
+        );
+        if (this.client) {
+            this.client.from('configuracion')
+                .upsert({ clave: key, valor: value }, { onConflict: 'clave' })
+                .then(({ error }) => { if (error) console.error(error.message); });
+        }
     },
 
-    // Helper: Next order/quote number
-    nextNumber(prefix) {
-        const row = this.getOne(`SELECT MAX(CAST(SUBSTR(numero, ${prefix.length + 2}) AS INTEGER)) as max_num FROM ${prefix === 'COT' ? 'cotizaciones' : 'pedidos'}`);
-        const next = (row && row.max_num ? row.max_num : 0) + 1;
-        return `${prefix}-${String(next).padStart(3, '0')}`;
+    run(sql, params = []) {
+        try {
+            this.db.run(sql, params);
+            const sync = this.syncMutation(sql, params).catch(err => {
+                this.reportSyncError(err);
+                return false;
+            });
+            return sync;
+        } catch (err) {
+            console.error('DB.run error:', err, sql, params);
+            throw err;
+        }
     },
 
-    // Reset database
+    async syncMutation(sql, params) {
+        if (!this.client) return;
+        const normalized = sql.replace(/\s+/g, ' ').trim();
+        const table = this.extractTable(normalized);
+        if (!table) return;
+
+        if (/^INSERT INTO/i.test(normalized)) {
+            const row = this.getInsertedRow(normalized, table, params);
+            if (row) {
+                const { error } = await this.client
+                    .from(table)
+                    .upsert(this.cleanRow(row), { onConflict: 'id' });
+                if (error) throw error;
+            }
+        } else if (/^UPDATE/i.test(normalized)) {
+            const id = params[params.length - 1];
+            const row = this.getOne(`SELECT * FROM ${table} WHERE id = ?`, [id]);
+            if (row) {
+                const { error } = await this.client
+                    .from(table)
+                    .upsert(this.cleanRow(row), { onConflict: 'id' });
+                if (error) throw error;
+            }
+        } else if (/^DELETE FROM/i.test(normalized)) {
+            const id = params[0];
+            const { error } = await this.client.from(table).delete().eq('id', id);
+            if (error) throw error;
+        }
+    },
+
+    getInsertedRow(sql, table, params) {
+        const columnsMatch = sql.match(/^INSERT INTO\s+[a-z_]+\s*\(([^)]+)\)/i);
+        if (columnsMatch) {
+            const columns = columnsMatch[1].split(',').map(col => col.trim());
+            const idIndex = columns.indexOf('id');
+            if (idIndex >= 0 && params[idIndex] !== undefined) {
+                return this.getOne(`SELECT * FROM ${table} WHERE id = ?`, [params[idIndex]]);
+            }
+        }
+        return this.getOne(`SELECT * FROM ${table} ORDER BY id DESC LIMIT 1`);
+    },
+
+    reportSyncError(error) {
+        console.error('Supabase sync error:', error.message || error);
+        if (window.App && App.showToast) {
+            App.showToast(`No se pudo sincronizar con Supabase: ${error.message || error}`, 'error');
+        }
+    },
+
+    extractTable(sql) {
+        const insert = sql.match(/^INSERT INTO\s+([a-z_]+)/i);
+        const update = sql.match(/^UPDATE\s+([a-z_]+)/i);
+        const del = sql.match(/^DELETE FROM\s+([a-z_]+)/i);
+        return (insert || update || del || [])[1] || null;
+    },
+
+    cleanRow(row) {
+        const cleaned = {};
+        Object.entries(row).forEach(([key, value]) => {
+            cleaned[key] = value === undefined ? null : value;
+        });
+        return cleaned;
+    },
+
+    insertLocal(table, row) {
+        if (table === 'clientes' && (!row.whatsapp || String(row.whatsapp).trim() === '')) {
+            row = { ...row, whatsapp: `sin-whatsapp-${row.id || Date.now()}` };
+        }
+        const allowed = this.getTableColumns(table);
+        const keys = Object.keys(row).filter(key => allowed.has(key));
+        const placeholders = keys.map(() => '?').join(',');
+        const numericColumns = new Set([
+            'id', 'cliente_id', 'cotizacion_id', 'tamano',
+            'precio_tamano', 'precio_sabor', 'precio_diseno', 'precio',
+            'total', 'anticipo', 'saldo_pendiente', 'activo'
+        ]);
+        const values = keys.map(k => {
+            if (numericColumns.has(k) && row[k] !== null && row[k] !== undefined && row[k] !== '') {
+                const num = Number(row[k]);
+                if (!isNaN(num)) {
+                    return num;
+                }
+            }
+            return row[k];
+        });
+        this.db.run(
+            `INSERT OR REPLACE INTO ${table} (${keys.join(',')}) VALUES (${placeholders})`,
+            values
+        );
+    },
+
+    getTableColumns(table) {
+        const info = this.getAll(`PRAGMA table_info(${table})`);
+        return new Set(info.map(col => col.name));
+    },
+
+    deleteLocalById(table, id) {
+        if (id !== undefined && id !== null) this.db.run(`DELETE FROM ${table} WHERE id = ?`, [id]);
+    },
+
+    seedDemoData() {
+        const now = new Date().toISOString();
+        const config = [
+            ['negocio_nombre', "Milena's Pasteleria"],
+            ['negocio_subtitulo', 'Pasteles personalizados'],
+            ['negocio_whatsapp', '50200000000'],
+            ['negocio_direccion', 'Ciudad de Guatemala'],
+            ['moneda_simbolo', 'Q.'],
+            ['moneda_nombre', 'Quetzal'],
+            ['whatsapp_mensaje', "Hola, te comparto la cotizacion de tu pedido:"]
+        ];
+        config.forEach(c => this.db.run("INSERT OR IGNORE INTO configuracion (clave, valor) VALUES (?, ?)", c));
+
+        this.db.run("INSERT OR IGNORE INTO usuarios (id,nombre,usuario,password,rol,activo,created_at) VALUES ('demo-admin','Admin Milena','admin','admin123','admin',1,?)", [now]);
+        this.db.run("INSERT OR IGNORE INTO usuarios (id,nombre,usuario,password,rol,activo,created_at) VALUES ('demo-ventas','Vendedora','ventas','ventas123','vendedor',1,?)", [now]);
+
+        const products = [
+            ['tamano', '10', 120, '10 porciones', 'cake'],
+            ['tamano', '20', 220, '20 porciones', 'cake'],
+            ['tamano', '30', 320, '30 porciones', 'cake'],
+            ['sabor', 'Vainilla', 0, '', ''],
+            ['sabor', 'Chocolate', 15, '', ''],
+            ['sabor', 'Red velvet', 25, '', ''],
+            ['diseno', 'Basico', 0, '', ''],
+            ['diseno', 'Personalizado', 60, '', ''],
+            ['decoracion', 'Topper', 25, '', ''],
+            ['fondant', 'Figura simple', 45, '', ''],
+            ['extras', 'Relleno extra', 30, '', '']
+        ];
+        products.forEach((p, i) => {
+            this.db.run(
+                "INSERT OR IGNORE INTO catalogo (id,categoria,nombre,precio,descripcion,emoji,activo,created_at) VALUES (?,?,?,?,?,?,1,?)",
+                [i + 1, ...p, now]
+            );
+        });
+    },
+
     reset() {
-        localStorage.removeItem('milenas_v3_db');
-        location.reload();
+        if (!confirm('Esto solo reinicia los datos locales en memoria. Para limpiar Supabase usa el panel SQL.')) return;
+        this.tables.forEach(t => this.db.run(`DELETE FROM ${t}`));
+        this.seedDemoData();
+        App.navigateTo(App.currentPage || 'nueva-cotizacion');
     }
 };
+
+window.DB = DB;

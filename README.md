@@ -1,45 +1,68 @@
-# 🎂 Milena's Pastelería — Sistema de Cotizaciones
+# Milena's Pasteleria - Sistema de Cotizaciones
 
-Sistema de gestión de cotizaciones para pastelería. Aplicación web 100% gratuita.
+Aplicacion web para cotizaciones, pedidos, clientes, reportes y configuracion.
 
-## 🚀 Demo
+## Cambios implementados
 
-Abre `index.html` con un servidor local o despliega en Netlify.
+- Login propio del sistema con usuario y contrasena guardada en `public.usuarios`.
+- Supabase Auth ya no se usa para iniciar sesion ni para crear empleados.
+- RLS queda activo con politicas para la `anon public key`, evitando el estado `unrestricted`.
+- Realtime queda activado para `configuracion`, `usuarios`, `catalogo`, `clientes`, `cotizaciones` y `pedidos`.
+- `usuarios` guarda nombre, usuario, rol, estado y contrasena visible/editable desde la app.
+- Se mantiene WhatsApp como identificador obligatorio del cliente y no se usa DNI.
+- Se conservan los estados: `Nueva`, `En seguimiento`, `Cerrada (venta)`, `Perdida`.
+
+## Configurar Supabase desde cero
+
+1. Crea el proyecto en Supabase.
+2. Abre `SQL Editor` y ejecuta completo `supabase-schema.sql`.
+3. Ve a `Project Settings > API` y copia `Project URL` y `anon public key`.
+4. Configura esos valores en `js/database.js`:
+
+```js
+const SUPABASE_URL = window.MILENAS_SUPABASE_URL || 'https://TU-PROYECTO.supabase.co';
+const SUPABASE_KEY = window.MILENAS_SUPABASE_ANON_KEY || 'TU-ANON-KEY';
+```
+
+Tambien puedes definir `window.MILENAS_SUPABASE_URL` y `window.MILENAS_SUPABASE_ANON_KEY` antes de cargar `js/database.js`.
+
+## Crear el primer administrador
+
+Despues de ejecutar `supabase-schema.sql`:
+
+El SQL crea un administrador inicial:
+
+- Usuario: `admin`
+- Contrasena: `admin123`
+
+Puedes cambiar esos datos desde `Configuracion > Usuarios` al entrar.
+
+## Usuarios nuevos desde la app
+
+1. Entra a la app con un usuario `admin`.
+2. Ve a `Configuracion > Usuarios > Nuevo Usuario`.
+3. Completa nombre, usuario, rol y contrasena.
+
+El administrador puede ver y editar todas las contrasenas desde la tabla de usuarios.
+
+## RLS y Realtime
+
+`supabase-schema.sql` deja RLS activo con politicas para `anon` y agrega las tablas a `supabase_realtime`.
+
+Si necesitas verificarlo, ejecuta `supabase-rls-fix.sql`; reafirma RLS, politicas para `anon`, replica identity y publicacion realtime.
+
+## Dependencias
+
+No hay dependencias npm obligatorias. La app usa CDN:
+
+- `sql.js`
+- `@supabase/supabase-js`
+- `Chart.js`
+- `Lucide Icons`
+- `html2pdf.js`
+
+Para probar localmente:
 
 ```bash
 npx serve .
 ```
-
-## 📋 Funcionalidades
-
-| Página | Descripción |
-|--------|-------------|
-| **Nueva cotización** | Crea cotizaciones seleccionando tamaño, sabor, diseño y extras |
-| **Cotizaciones** | Lista y gestiona todas las cotizaciones con filtros por estado |
-| **Pedidos** | Tablero Kanban para seguimiento de pedidos |
-| **Clientes** | Gestiona tu base de clientes con historial |
-| **Catálogo** | Administra productos, precios y categorías |
-| **Reportes** | Dashboard con gráficos y estadísticas |
-| **Configuración** | Ajustes del negocio, precios y sistema |
-
-## 🛠️ Tecnología
-
-- **HTML/CSS/JS** puro (sin frameworks)
-- **sql.js** — SQLite compilado a WebAssembly (base de datos en el navegador)
-- **Chart.js** — Gráficos interactivos
-- **Lucide Icons** — Iconos SVG
-- **Inter + Dancing Script** — Tipografías de Google Fonts
-- **Datos persistidos** en `localStorage`
-
-## 🌐 Deploy en Netlify
-
-1. Sube la carpeta del proyecto a un repositorio de GitHub
-2. En [app.netlify.com](https://app.netlify.com), haz clic en **"Add new site" → "Import an existing project"**
-3. Conecta tu repositorio de GitHub
-4. Deja la configuración por defecto (ya está incluido `netlify.toml`)
-5. Haz clic en **"Deploy site"**
-6. ¡Listo! Comparte la URL con tu cliente
-
-## 💰 Costo
-
-**$0** — Todo utiliza herramientas gratuitas.

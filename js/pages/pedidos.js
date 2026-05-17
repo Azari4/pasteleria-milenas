@@ -5,7 +5,7 @@ window.Pages = window.Pages || {};
 
 Pages.pedidos = {
     render() {
-        const pedidos = DB.getAll("SELECT p.*, cl.dni FROM pedidos p LEFT JOIN clientes cl ON p.cliente_id = cl.id ORDER BY p.fecha_entrega ASC");
+        const pedidos = DB.getAll("SELECT p.*, COALESCE(p.cliente_whatsapp, cl.whatsapp) as cli_wp FROM pedidos p LEFT JOIN clientes cl ON p.cliente_id = cl.id ORDER BY p.fecha_entrega ASC");
         const enPreparacion = pedidos.filter(p => p.estado === 'en_preparacion');
         const listos = pedidos.filter(p => p.estado === 'listo');
         const entregados = pedidos.filter(p => p.estado === 'entregado');
@@ -85,7 +85,7 @@ Pages.pedidos = {
                         <tr>
                             <th>#</th>
                             <th>Cliente</th>
-                            <th>DNI</th>
+                            <th>WhatsApp</th>
                             <th>Descripción</th>
                             <th>Entrega</th>
                             <th>Total</th>
@@ -100,7 +100,7 @@ Pages.pedidos = {
                             <tr>
                                 <td><strong>${p.numero}</strong></td>
                                 <td>${p.cliente_nombre || '—'}</td>
-                                <td style="font-size:.82rem;color:var(--text-medium);">${p.dni || '—'}</td>
+                                <td style="font-size:.82rem;color:var(--text-medium);">${p.cli_wp || '—'}</td>
                                 <td style="max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${p.descripcion || '—'}</td>
                                 <td>${App.formatDate(p.fecha_entrega)} ${p.hora_entrega || ''}</td>
                                 <td><strong>${App.formatCurrency(p.total)}</strong></td>
@@ -160,7 +160,7 @@ Pages.pedidos = {
     },
 
     verDetalle(id) {
-        const p = DB.getOne("SELECT p.*, cl.dni FROM pedidos p LEFT JOIN clientes cl ON p.cliente_id = cl.id WHERE p.id = ?", [id]);
+        const p = DB.getOne("SELECT p.*, COALESCE(p.cliente_whatsapp, cl.whatsapp) as cli_wp FROM pedidos p LEFT JOIN clientes cl ON p.cliente_id = cl.id WHERE p.id = ?", [id]);
         if (!p) return;
 
         const saldo = p.saldo_pendiente || 0;
@@ -169,7 +169,7 @@ Pages.pedidos = {
         App.showModal(`Pedido ${p.numero}`, `
             <div style="display:grid;grid-template-columns:1fr 1fr;gap:.5rem .8rem;font-size:.9rem;">
                 <p><strong>Cliente:</strong></p><p>${p.cliente_nombre || '—'}</p>
-                <p><strong>DNI:</strong></p><p>${p.dni || '—'}</p>
+                <p><strong>WhatsApp:</strong></p><p>${p.cli_wp || '—'}</p>
                 <p><strong>Descripción:</strong></p><p>${p.descripcion || '—'}</p>
                 <p><strong>Fecha entrega:</strong></p><p>${App.formatDate(p.fecha_entrega)} ${p.hora_entrega || ''}</p>
                 <p><strong>Estado:</strong></p><p><span class="status-badge status-${p.estado}">${App.statusLabel(p.estado)}</span></p>
@@ -202,26 +202,26 @@ Pages.pedidos = {
         );
     },
 
-    _guardarAnticipo(id, total) {
+    async _guardarAnticipo(id, total) {
         const monto = parseFloat(document.getElementById('ant-monto').value) || 0;
         if (monto < 0 || monto > total) {
             App.showToast('El anticipo debe estar entre 0 y el total', 'error');
             return;
         }
         const saldo = Math.max(0, total - monto);
-        DB.run("UPDATE pedidos SET anticipo = ?, saldo_pendiente = ? WHERE id = ?", [monto, saldo, id]);
+        await DB.run("UPDATE pedidos SET anticipo = ?, saldo_pendiente = ? WHERE id = ?", [monto, saldo, id]);
         App.closeModal();
         App.showToast('Anticipo actualizado', 'success');
         App.navigateTo('pedidos');
     },
 
-    cambiarEstado(id, estado) {
-        DB.run("UPDATE pedidos SET estado = ? WHERE id = ?", [estado, id]);
+    async cambiarEstado(id, estado) {
+        await DB.run("UPDATE pedidos SET estado = ? WHERE id = ?", [estado, id]);
 
         if (estado === 'entregado') {
             const p = DB.getOne("SELECT * FROM pedidos WHERE id = ?", [id]);
             if (p && p.cotizacion_id) {
-                DB.run("UPDATE cotizaciones SET estado = 'enviada' WHERE id = ?", [p.cotizacion_id]);
+                await DB.run("UPDATE cotizaciones SET estado = 'Cerrada (venta)' WHERE id = ?", [p.cotizacion_id]);
             }
         }
 

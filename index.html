@@ -1,26 +1,33 @@
 <!DOCTYPE html>
 <html lang="es">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Milena's Pastelería — Sistema de Cotizaciones</title>
-    <meta name="description" content="Sistema de gestión de cotizaciones para Milena's Pastelería. Crea cotizaciones, gestiona pedidos y clientes.">
+    <meta name="description"
+        content="Sistema de gestión de cotizaciones para Milena's Pastelería. Crea cotizaciones, gestiona pedidos y clientes.">
     <link rel="icon" href="assets/logo.png">
-    
+
     <!-- Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Dancing+Script:wght@600;700&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-    
+    <link
+        href="https://fonts.googleapis.com/css2?family=Dancing+Script:wght@600;700&family=Inter:wght@300;400;500;600;700&display=swap"
+        rel="stylesheet">
+
     <!-- Styles -->
     <link rel="stylesheet" href="css/styles.css">
 </head>
+
 <body>
     <!-- Loading Screen -->
     <div id="loading-screen" class="loading-screen">
         <div class="loader">
             <div class="loader-icon">🎂</div>
-            <div class="loader-bar"><div class="loader-fill"></div></div>
+            <div class="loader-bar">
+                <div class="loader-fill"></div>
+            </div>
             <p class="loader-text">Cargando Milena's...</p>
         </div>
     </div>
@@ -28,7 +35,8 @@
     <div id="login-screen" class="login-screen" style="display:none;">
         <div class="login-card">
             <div class="login-header">
-                <img src="assets/logo.png" alt="Milena's" class="login-logo" onerror="this.style.display='none'; this.nextElementSibling.style.display='block';">
+                <img src="assets/logo.png" alt="Milena's" class="login-logo"
+                    onerror="this.style.display='none'; this.nextElementSibling.style.display='block';">
                 <span class="logo-icon-fallback" style="display:none; font-size:3rem;">🎂</span>
                 <h2>Iniciar Sesión</h2>
                 <p>Bienvenido al sistema de cotizaciones</p>
@@ -36,15 +44,20 @@
             <form id="login-form">
                 <div class="form-group">
                     <label for="login-usuario">Usuario</label>
-                    <input type="text" id="login-usuario" class="form-input" required placeholder="Ej: admin">
+                    <input type="text" id="login-usuario" class="form-input" required placeholder="admin" autocomplete="username">
                 </div>
                 <div class="form-group">
                     <label for="login-password">Contraseña</label>
                     <input type="password" id="login-password" class="form-input" required placeholder="********">
                 </div>
+                <label style="display:flex;align-items:center;gap:.5rem;margin:.5rem 0 1rem;font-size:.85rem;color:var(--text-medium);">
+                    <input type="checkbox" id="login-remember">
+                    <span>Mantener sesion</span>
+                </label>
                 <button type="submit" class="btn btn-primary btn-block">Ingresar</button>
-                <div id="login-error" class="login-error" style="display:none; color:red; margin-top:10px; text-align:center;">
-                    Usuario o contraseña incorrectos.
+                <div id="login-error" class="login-error"
+                    style="display:none; color:red; margin-top:10px; text-align:center;">
+                    Usuario o contrasena incorrectos.
                 </div>
             </form>
         </div>
@@ -54,14 +67,15 @@
         <!-- Sidebar -->
         <aside id="sidebar" class="sidebar">
             <div class="sidebar-logo">
-                <img src="assets/logo.png" alt="Milena's" class="logo-img" onerror="this.style.display='none'; this.nextElementSibling.querySelector('.logo-icon-fallback').style.display='flex';">
+                <img src="assets/logo.png" alt="Milena's" class="logo-img"
+                    onerror="this.style.display='none'; this.nextElementSibling.querySelector('.logo-icon-fallback').style.display='flex';">
                 <div class="logo-text">
                     <span class="logo-icon-fallback" style="display:none;">🎂</span>
                     <span class="logo-name">Milena's</span>
                     <span class="logo-subtitle">Pastelería</span>
                 </div>
             </div>
-            
+
             <nav class="sidebar-nav">
                 <a href="#nueva-cotizacion" class="nav-item active" data-page="nueva-cotizacion">
                     <i data-lucide="plus-circle"></i>
@@ -89,7 +103,7 @@
                     <span>Configuración</span>
                 </a>
             </nav>
-            
+
             <div class="sidebar-footer">
                 <a href="#" class="nav-item" id="btn-logout">
                     <i data-lucide="log-out"></i>
@@ -97,7 +111,7 @@
                 </a>
             </div>
         </aside>
-        
+
         <!-- Main Content -->
         <main class="main-wrapper">
             <!-- Header -->
@@ -117,7 +131,7 @@
                     </div>
                 </div>
             </header>
-            
+
             <!-- Dynamic Content -->
             <div id="main-content" class="main-content">
             </div>
@@ -136,7 +150,10 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/sql.js/1.10.3/sql-wasm.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
     <script src="https://unpkg.com/lucide@0.294.0/dist/umd/lucide.js"></script>
-    
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+
     <!-- App Scripts -->
     <script src="js/database.js"></script>
     <script src="js/pages/nueva-cotizacion.js"></script>
@@ -148,4 +165,5 @@
     <script src="js/pages/configuracion.js"></script>
     <script src="js/app.js"></script>
 </body>
+
 </html>

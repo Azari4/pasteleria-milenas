@@ -28,15 +28,15 @@ Pages.cotizaciones = {
             <div class="stat-card">
                 <div class="stat-icon orange"><i data-lucide="clock"></i></div>
                 <div class="stat-info">
-                    <h3 id="stat-pendientes">${stats.pendientes}</h3>
-                    <p>Pendientes</p>
+                    <h3 id="stat-pendientes">${stats.nuevas}</h3>
+                    <p>Nuevas</p>
                 </div>
             </div>
             <div class="stat-card">
                 <div class="stat-icon green"><i data-lucide="check-circle"></i></div>
                 <div class="stat-info">
-                    <h3 id="stat-aceptadas">${stats.aceptadas}</h3>
-                    <p>Aceptadas</p>
+                    <h3 id="stat-aceptadas">${stats.cerradas}</h3>
+                    <p>Cerradas (venta)</p>
                 </div>
             </div>
             <div class="stat-card">
@@ -55,10 +55,10 @@ Pages.cotizaciones = {
                 <div style="display:flex; align-items:center; gap:.5rem; flex-wrap:wrap; margin-bottom:.6rem;">
                     <div class="filter-pills" style="flex:1; flex-wrap:wrap;">
                         <button class="filter-pill ${this.currentFilter === 'todas' ? 'active' : ''}" data-filter="todas">Todas</button>
-                        <button class="filter-pill ${this.currentFilter === 'pendiente' ? 'active' : ''}" data-filter="pendiente">Pendientes</button>
-                        <button class="filter-pill ${this.currentFilter === 'enviada' ? 'active' : ''}" data-filter="enviada">Enviadas</button>
-                        <button class="filter-pill ${this.currentFilter === 'aceptada' ? 'active' : ''}" data-filter="aceptada">Aceptadas</button>
-                        <button class="filter-pill ${this.currentFilter === 'rechazada' ? 'active' : ''}" data-filter="rechazada">Rechazadas</button>
+                        <button class="filter-pill ${this.currentFilter === 'Nueva' ? 'active' : ''}" data-filter="Nueva">Nueva</button>
+                        <button class="filter-pill ${this.currentFilter === 'En seguimiento' ? 'active' : ''}" data-filter="En seguimiento">En seguimiento</button>
+                        <button class="filter-pill ${this.currentFilter === 'Cerrada (venta)' ? 'active' : ''}" data-filter="Cerrada (venta)">Cerrada (venta)</button>
+                        <button class="filter-pill ${this.currentFilter === 'Perdida' ? 'active' : ''}" data-filter="Perdida">Perdida</button>
                     </div>
                     <button class="btn btn-primary btn-sm" onclick="window.location.hash='nueva-cotizacion'">
                         <i data-lucide="plus"></i> Nueva
@@ -70,7 +70,7 @@ Pages.cotizaciones = {
                         <i data-lucide="search" style="position:absolute;left:.6rem;top:50%;transform:translateY(-50%);width:15px;height:15px;color:var(--text-light);pointer-events:none;"></i>
                         <input type="text" id="cot-search" class="form-input" 
                                style="padding-left:2rem; height:36px; font-size:.85rem;"
-                               placeholder="Buscar por nombre o DNI..." value="${this.searchQuery}">
+                               placeholder="Buscar por nombre o WhatsApp..." value="${this.searchQuery}">
                     </div>
                     <input type="date" id="cot-fecha-ini" class="form-input" 
                            style="height:36px; font-size:.82rem; width:140px;" value="${this.fechaInicio}" title="Fecha desde">
@@ -102,7 +102,7 @@ Pages.cotizaciones = {
                         <tr>
                             <th>#</th>
                             <th>Cliente</th>
-                            <th>DNI</th>
+                            <th>WhatsApp</th>
                             <th>Tamaño</th>
                             <th>Sabor</th>
                             <th>Diseño</th>
@@ -133,12 +133,12 @@ Pages.cotizaciones = {
             <tr>
                 <td><strong>${c.numero}</strong></td>
                 <td>${c.cliente_nombre || '—'}</td>
-                <td style="font-size:.82rem; color:var(--text-medium);">${c.dni || '—'}</td>
+                <td style="font-size:.82rem; color:var(--text-medium);">${c.cli_wp || '—'}</td>
                 <td>${c.tamano} porc.</td>
                 <td>${c.sabor}</td>
                 <td>${c.diseno}</td>
                 <td><strong>${App.formatCurrency(c.total)}</strong></td>
-                <td><span class="status-badge status-${c.estado}">${App.statusLabel(c.estado)}</span></td>
+                <td><span class="status-badge status-${App.statusClass(c.estado)}">${App.statusLabel(c.estado)}</span></td>
                 <td style="font-size:.82rem;color:var(--text-medium);">${c.usuario_nombre || '—'}</td>
                 <td style="font-size:.82rem;">${App.formatDate(c.created_at)}</td>
                 <td>
@@ -149,11 +149,17 @@ Pages.cotizaciones = {
                         <button class="btn btn-sm btn-outline btn-icon" title="Editar" onclick="Pages.cotizaciones.editarCotizacion(${c.id})">
                             <i data-lucide="edit-2"></i>
                         </button>
-                        ${c.estado !== 'aceptada' && c.estado !== 'rechazada' ? `
-                        <button class="btn btn-sm btn-primary btn-icon" title="Aceptar" onclick="Pages.cotizaciones.cambiarEstado(${c.id}, 'aceptada')">
+                        <button class="btn btn-sm btn-outline btn-icon" title="Imprimir PDF" onclick="Pages.cotizaciones.imprimirPDF(${c.id})">
+                            <i data-lucide="printer"></i>
+                        </button>
+                        ${c.estado !== 'Cerrada (venta)' && c.estado !== 'Perdida' ? `
+                        <button class="btn btn-sm btn-outline btn-icon" title="En seguimiento" onclick="Pages.cotizaciones.cambiarEstado(${c.id}, 'En seguimiento')">
+                            <i data-lucide="send"></i>
+                        </button>
+                        <button class="btn btn-sm btn-primary btn-icon" title="Cerrar venta" onclick="Pages.cotizaciones.cambiarEstado(${c.id}, 'Cerrada (venta)')">
                             <i data-lucide="check"></i>
                         </button>
-                        <button class="btn btn-sm btn-outline btn-icon text-danger" title="Rechazar" onclick="if(confirm('¿Marcar cotización como rechazada?')) Pages.cotizaciones.cambiarEstado(${c.id}, 'rechazada')">
+                        <button class="btn btn-sm btn-outline btn-icon text-danger" title="Marcar perdida" onclick="if(confirm('¿Marcar cotización como perdida?')) Pages.cotizaciones.cambiarEstado(${c.id}, 'Perdida')">
                             <i data-lucide="x"></i>
                         </button>` : ''}
                         <button class="btn btn-sm btn-outline btn-icon text-danger" title="Eliminar" onclick="Pages.cotizaciones.eliminar(${c.id})">
@@ -172,14 +178,14 @@ Pages.cotizaciones = {
         }
         return {
             total: all.length,
-            pendientes: all.filter(c => c.estado === 'pendiente').length,
-            aceptadas: all.filter(c => c.estado === 'aceptada').length,
+            nuevas: all.filter(c => c.estado === 'Nueva').length,
+            cerradas: all.filter(c => c.estado === 'Cerrada (venta)').length,
             totalMonto: all.reduce((sum, c) => sum + c.total, 0)
         };
     },
 
     getCotizaciones() {
-        let sql = `SELECT c.*, cl.dni FROM cotizaciones c 
+        let sql = `SELECT c.*, COALESCE(c.cliente_whatsapp, cl.whatsapp) as cli_wp FROM cotizaciones c
                    LEFT JOIN clientes cl ON c.cliente_id = cl.id`;
         const params = [];
 
@@ -204,7 +210,7 @@ Pages.cotizaciones = {
         if (q) {
             rows = rows.filter(r =>
                 (r.cliente_nombre || '').toLowerCase().includes(q) ||
-                (r.dni || '').toLowerCase().includes(q)
+                (r.cli_wp || '').toLowerCase().includes(q)
             );
         }
 
@@ -221,7 +227,41 @@ Pages.cotizaciones = {
             rows = rows.filter(r => (r.usuario_nombre || '') === this.vendedoraFilter);
         }
 
-        return rows;
+        return this.sortCotizaciones(rows);
+    },
+
+    sortCotizaciones(rows) {
+        const dateValue = (row) => {
+            if (!row.created_at) return 0;
+            const normalized = String(row.created_at).includes('T')
+                ? row.created_at
+                : String(row.created_at).replace(' ', 'T');
+            const time = Date.parse(normalized);
+            return Number.isNaN(time) ? 0 : time;
+        };
+        const idValue = (row) => Number(row.id || 0);
+
+        return [...rows].sort((a, b) => {
+            if (this.currentSort === 'fecha_asc') {
+                return (dateValue(a) - dateValue(b)) || (idValue(a) - idValue(b));
+            }
+            if (this.currentSort === 'estado') {
+                return String(a.estado || '').localeCompare(String(b.estado || '')) ||
+                    (dateValue(b) - dateValue(a)) ||
+                    (idValue(b) - idValue(a));
+            }
+            if (this.currentSort === 'total_desc') {
+                return (Number(b.total || 0) - Number(a.total || 0)) ||
+                    (dateValue(b) - dateValue(a)) ||
+                    (idValue(b) - idValue(a));
+            }
+            if (this.currentSort === 'total_asc') {
+                return (Number(a.total || 0) - Number(b.total || 0)) ||
+                    (dateValue(b) - dateValue(a)) ||
+                    (idValue(b) - idValue(a));
+            }
+            return (dateValue(b) - dateValue(a)) || (idValue(b) - idValue(a));
+        });
     },
 
     refreshTable() {
@@ -237,8 +277,8 @@ Pages.cotizaciones = {
         const elAcep = document.getElementById('stat-aceptadas');
         const elMonto = document.getElementById('stat-monto');
         if (elTotal) elTotal.textContent = stats.total;
-        if (elPend) elPend.textContent = stats.pendientes;
-        if (elAcep) elAcep.textContent = stats.aceptadas;
+        if (elPend) elPend.textContent = stats.nuevas;
+        if (elAcep) elAcep.textContent = stats.cerradas;
         if (elMonto) elMonto.textContent = App.formatCurrency(stats.totalMonto);
     },
 
@@ -299,7 +339,7 @@ Pages.cotizaciones = {
     },
 
     editarCotizacion(id) {
-        const c = DB.getOne("SELECT c.*, cl.dni, cl.whatsapp as cli_wp FROM cotizaciones c LEFT JOIN clientes cl ON c.cliente_id = cl.id WHERE c.id = ?", [id]);
+        const c = DB.getOne("SELECT c.*, COALESCE(c.cliente_whatsapp, cl.whatsapp) as cli_wp FROM cotizaciones c LEFT JOIN clientes cl ON c.cliente_id = cl.id WHERE c.id = ?", [id]);
         if (!c) return;
 
         let extras = [];
@@ -319,7 +359,6 @@ Pages.cotizaciones = {
             extras: extras,
             observaciones: c.observaciones || '',
             clienteNombre: c.cliente_nombre || '',
-            clienteDni: c.dni || '',
             clienteWhatsapp: c.cli_wp || '',
             guardarCliente: false,
             editingId: c.id
@@ -329,7 +368,7 @@ Pages.cotizaciones = {
     },
 
     verDetalle(id) {
-        const c = DB.getOne("SELECT c.*, cl.dni FROM cotizaciones c LEFT JOIN clientes cl ON c.cliente_id = cl.id WHERE c.id = ?", [id]);
+        const c = DB.getOne("SELECT c.*, COALESCE(c.cliente_whatsapp, cl.whatsapp) as cli_wp FROM cotizaciones c LEFT JOIN clientes cl ON c.cliente_id = cl.id WHERE c.id = ?", [id]);
         if (!c) return;
 
         let extras = [];
@@ -342,11 +381,11 @@ Pages.cotizaciones = {
         App.showModal(`Cotización ${c.numero}`, `
             <div style="display:grid;grid-template-columns:1fr 1fr;gap:.5rem .8rem;font-size:.9rem;">
                 <p><strong>Cliente:</strong></p><p>${c.cliente_nombre || '—'}</p>
-                <p><strong>DNI:</strong></p><p>${c.dni || '—'}</p>
+                <p><strong>WhatsApp:</strong></p><p>${c.cli_wp || '—'}</p>
                 <p><strong>Tamaño:</strong></p><p>${c.tamano} porciones</p>
                 <p><strong>Sabor:</strong></p><p>${c.sabor}</p>
                 <p><strong>Diseño:</strong></p><p>${c.diseno}</p>
-                <p><strong>Estado:</strong></p><p><span class="status-badge status-${c.estado}">${App.statusLabel(c.estado)}</span></p>
+                <p><strong>Estado:</strong></p><p><span class="status-badge status-${App.statusClass(c.estado)}">${App.statusLabel(c.estado)}</span></p>
                 <p><strong>Vendedora:</strong></p><p>${c.usuario_nombre || '—'}</p>
                 <p><strong>Fecha:</strong></p><p>${App.formatDateTime(c.created_at)}</p>
             </div>
@@ -367,10 +406,57 @@ Pages.cotizaciones = {
         }
     },
 
-    cambiarEstado(id, estado) {
-        if (estado === 'aceptada') {
-            Pages.pedidos.pedirFechaYCrear((fecha, hora, anticipo) => {
-                DB.run("UPDATE cotizaciones SET estado = ? WHERE id = ?", [estado, id]);
+    imprimirPDF(id) {
+        const c = DB.getOne("SELECT c.*, COALESCE(c.cliente_whatsapp, cl.whatsapp) as cli_wp FROM cotizaciones c LEFT JOIN clientes cl ON c.cliente_id = cl.id WHERE c.id = ?", [id]);
+        if (!c) return;
+
+        let extras = [];
+        try { extras = JSON.parse(c.extras || '[]'); } catch (e) { }
+
+        const rows = [
+            ['Tamano', `${c.tamano} porciones`, c.precio_tamano],
+            ['Sabor', c.sabor, c.precio_sabor],
+            ['Diseno', c.diseno, c.precio_diseno],
+            ...extras.map(e => ['Extra', e.nombre, e.precio])
+        ];
+
+        const printable = document.createElement('div');
+        printable.className = 'print-quote';
+        printable.innerHTML = `
+            <div class="print-header">
+                <h1>${DB.getConfig('negocio_nombre') || "Milena's Pasteleria"}</h1>
+                <p>Cotizacion ${c.numero}</p>
+            </div>
+            <div class="print-meta">
+                <p><strong>Cliente:</strong> ${c.cliente_nombre || '-'}</p>
+                <p><strong>WhatsApp:</strong> ${c.cli_wp || '-'}</p>
+                <p><strong>Fecha:</strong> ${App.formatDateTime(c.created_at)}</p>
+                <p><strong>Estado:</strong> ${App.statusLabel(c.estado)}</p>
+                <p><strong>Vendedora:</strong> ${c.usuario_nombre || '-'}</p>
+            </div>
+            <table class="print-table">
+                <thead><tr><th>Orden</th><th>Concepto</th><th>Detalle</th><th>Importe</th></tr></thead>
+                <tbody>
+                    ${rows.map((r, idx) => `<tr><td>${idx + 1}</td><td>${r[0]}</td><td>${r[1] || '-'}</td><td>${App.formatCurrency(r[2] || 0)}</td></tr>`).join('')}
+                </tbody>
+            </table>
+            ${c.observaciones ? `<div class="print-notes"><strong>Observaciones:</strong><br>${c.observaciones}</div>` : ''}
+            <div class="print-total"><span>Total</span><strong>${App.formatCurrency(c.total)}</strong></div>
+        `;
+
+        html2pdf().set({
+            margin: 10,
+            filename: `${c.numero || 'cotizacion'}.pdf`,
+            image: { type: 'jpeg', quality: 0.98 },
+            html2canvas: { scale: 2 },
+            jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
+        }).from(printable).save();
+    },
+
+    async cambiarEstado(id, estado) {
+        if (estado === 'Cerrada (venta)') {
+            Pages.pedidos.pedirFechaYCrear(async (fecha, hora, anticipo) => {
+                await DB.run("UPDATE cotizaciones SET estado = ? WHERE id = ?", [estado, id]);
                 const c = DB.getOne("SELECT * FROM cotizaciones WHERE id = ?", [id]);
                 if (c) {
                     const count = DB.getOne("SELECT COUNT(*) as c FROM pedidos").c + 1;
@@ -378,17 +464,18 @@ Pages.cotizaciones = {
                     const desc = `Pastel ${c.sabor} ${c.tamano} porc. - ${c.diseno}`;
                     const anticipoNum = parseFloat(anticipo) || 0;
                     const saldoPendiente = Math.max(0, c.total - anticipoNum);
-                    DB.run(
-                        `INSERT INTO pedidos (numero, cotizacion_id, cliente_id, cliente_nombre, descripcion, fecha_entrega, hora_entrega, estado, total, anticipo, saldo_pendiente, notas)
-                         VALUES (?,?,?,?,?,?,?,?,?,?,?,?)`,
-                        [numeroPed, c.id, c.cliente_id, c.cliente_nombre, desc, fecha, hora, 'en_preparacion', c.total, anticipoNum, saldoPendiente, c.observaciones || '']
+                    await DB.run(
+                        `INSERT INTO pedidos (numero, cotizacion_id, cliente_id, cliente_nombre, cliente_whatsapp, descripcion, fecha_entrega, hora_entrega, estado, total, anticipo, saldo_pendiente, notas, created_at)
+                         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+                        [numeroPed, c.id, c.cliente_id, c.cliente_nombre, c.cli_wp || c.cliente_whatsapp || '', desc, fecha, hora, 'en_preparacion', c.total, anticipoNum, saldoPendiente, c.observaciones || '']
+                            .concat(new Date().toISOString())
                     );
-                    App.showToast(`Cotización aceptada. Pedido ${numeroPed} para el ${App.formatDate(fecha)}`, 'success');
+                    App.showToast(`Cotización cerrada. Pedido ${numeroPed} para el ${App.formatDate(fecha)}`, 'success');
                 }
                 this.refreshTable();
             });
         } else {
-            DB.run("UPDATE cotizaciones SET estado = ? WHERE id = ?", [estado, id]);
+            await DB.run("UPDATE cotizaciones SET estado = ? WHERE id = ?", [estado, id]);
             App.showToast('Estado actualizado', 'success');
             this.refreshTable();
         }

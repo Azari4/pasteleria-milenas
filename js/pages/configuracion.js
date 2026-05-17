@@ -5,6 +5,7 @@ window.Pages = window.Pages || {};
 
 Pages.configuracion = {
     currentTab: 'tamano',
+    currentSection: 'negocio',
 
     render() {
         const cfg = (k) => DB.getConfig(k) || '';
@@ -22,7 +23,7 @@ Pages.configuracion = {
         return `
         <div class="config-layout">
             <nav class="config-nav">
-                <div class="config-nav-item active" data-section="negocio"><i data-lucide="building"></i> Negocio</div>
+                <div class="config-nav-item ${this.currentSection === 'negocio' ? 'active' : ''}" data-section="negocio"><i data-lucide="building"></i> Negocio</div>
                 <div class="config-nav-item" data-section="catalogo"><i data-lucide="cake"></i> Catálogo</div>
                 <div class="config-nav-item" data-section="usuarios"><i data-lucide="users"></i> Usuarios</div>
                 <div class="config-nav-item" data-section="whatsapp"><i data-lucide="message-circle"></i> WhatsApp</div>
@@ -35,7 +36,6 @@ Pages.configuracion = {
                     <div class="config-grid">
                         <div class="form-group"><label class="form-label">Nombre del negocio</label><input type="text" id="cfg-nombre" class="form-input" value="${cfg('negocio_nombre')}"></div>
                         <div class="form-group"><label class="form-label">Subtítulo</label><input type="text" id="cfg-subtitulo" class="form-input" value="${cfg('negocio_subtitulo')}"></div>
-                        <div class="form-group"><label class="form-label">Email</label><input type="email" id="cfg-email" class="form-input" value="${cfg('negocio_email')}"></div>
                         <div class="form-group"><label class="form-label">WhatsApp del negocio</label><input type="text" id="cfg-whatsapp" class="form-input" value="${cfg('negocio_whatsapp')}"></div>
                     </div>
                     <div class="form-group"><label class="form-label">Dirección</label><input type="text" id="cfg-direccion" class="form-input" value="${cfg('negocio_direccion')}"></div>
@@ -73,6 +73,7 @@ Pages.configuracion = {
                                     <tr>
                                         <th>Nombre</th>
                                         <th>Usuario</th>
+                                        <th>Contraseña</th>
                                         <th>Rol</th>
                                         <th>Estado</th>
                                         <th>Acciones</th>
@@ -158,8 +159,8 @@ Pages.configuracion = {
                 document.querySelectorAll('.config-nav-item').forEach(i=>i.classList.remove('active'));
                 item.classList.add('active');
                 const sec = item.dataset.section;
-                document.querySelectorAll('.config-section').forEach(s=>{s.style.display='none';});
-                document.getElementById('sec-'+sec).style.display='block';
+                this.currentSection = sec;
+                this.switchSection(sec);
             });
         });
 
@@ -184,7 +185,6 @@ Pages.configuracion = {
         document.getElementById('btn-save-negocio').addEventListener('click',()=>{
             DB.setConfig('negocio_nombre', document.getElementById('cfg-nombre').value);
             DB.setConfig('negocio_subtitulo', document.getElementById('cfg-subtitulo').value);
-            DB.setConfig('negocio_email', document.getElementById('cfg-email').value);
             DB.setConfig('negocio_whatsapp', document.getElementById('cfg-whatsapp').value);
             DB.setConfig('negocio_direccion', document.getElementById('cfg-direccion').value);
             App.showToast('Datos del negocio guardados','success');
@@ -213,6 +213,17 @@ Pages.configuracion = {
                 DB.reset();
             }
         });
+        this.switchSection(this.currentSection);
+    },
+
+    switchSection(section) {
+        this.currentSection = section || 'negocio';
+        document.querySelectorAll('.config-nav-item').forEach(item => {
+            item.classList.toggle('active', item.dataset.section === this.currentSection);
+        });
+        document.querySelectorAll('.config-section').forEach(sec => {
+            sec.style.display = sec.id === `sec-${this.currentSection}` ? 'block' : 'none';
+        });
     },
 
     showAddProduct() {
@@ -233,11 +244,14 @@ Pages.configuracion = {
         `,`<button class="btn btn-outline" onclick="App.closeModal()">Cancelar</button><button class="btn btn-primary" onclick="Pages.configuracion.guardarNuevoProducto()">Guardar</button>`);
     },
 
-    guardarNuevoProducto() {
+    async guardarNuevoProducto() {
         const n=document.getElementById('np-nombre').value.trim();
         if(!n){App.showToast('Nombre requerido','error');return;}
-        DB.run("INSERT INTO catalogo (categoria,nombre,precio,descripcion,emoji) VALUES(?,?,?,?,?)",[
-            document.getElementById('np-cat').value, n,
+        const categoria = document.getElementById('np-cat').value;
+        const exists = DB.getOne("SELECT id FROM catalogo WHERE categoria=? AND lower(nombre)=lower(?)", [categoria, n]);
+        if(exists){App.showToast('Ya existe un producto con ese nombre en esta categoria','error');return;}
+        await DB.run("INSERT INTO catalogo (categoria,nombre,precio,descripcion,emoji) VALUES(?,?,?,?,?)",[
+            categoria, n,
             parseFloat(document.getElementById('np-precio').value)||0,
             document.getElementById('np-desc').value.trim(),
             document.getElementById('np-emoji').value.trim()||'🎂'
@@ -258,10 +272,13 @@ Pages.configuracion = {
         `,`<button class="btn btn-outline" onclick="App.closeModal()">Cancelar</button><button class="btn btn-primary" onclick="Pages.configuracion.guardarEditProducto(${id})">Guardar</button>`);
     },
 
-    guardarEditProducto(id) {
+    async guardarEditProducto(id) {
         const n=document.getElementById('ep-nombre').value.trim();
         if(!n){App.showToast('Nombre requerido','error');return;}
-        DB.run("UPDATE catalogo SET nombre=?,precio=?,descripcion=?,emoji=? WHERE id=?",[n,parseFloat(document.getElementById('ep-precio').value)||0,document.getElementById('ep-desc').value.trim(),document.getElementById('ep-emoji').value.trim()||'🎂',id]);
+        const current = DB.getOne("SELECT categoria FROM catalogo WHERE id=?", [id]);
+        const exists = current ? DB.getOne("SELECT id FROM catalogo WHERE categoria=? AND lower(nombre)=lower(?) AND id<>?", [current.categoria, n, id]) : null;
+        if(exists){App.showToast('Ya existe un producto con ese nombre en esta categoria','error');return;}
+        await DB.run("UPDATE catalogo SET nombre=?,precio=?,descripcion=?,emoji=? WHERE id=?",[n,parseFloat(document.getElementById('ep-precio').value)||0,document.getElementById('ep-desc').value.trim(),document.getElementById('ep-emoji').value.trim()||'🎂',id]);
         App.closeModal(); 
         App.showToast('Producto actualizado','success'); 
         this.refreshCatalogGrid();
@@ -285,20 +302,35 @@ Pages.configuracion = {
         if(window.lucide) lucide.createIcons();
     },
 
+    handleDataRefresh(table) {
+        if (table === 'catalogo') {
+            this.refreshCatalogGrid();
+            return;
+        }
+        if (table === 'usuarios') {
+            this.loadUsers();
+            return;
+        }
+        if (table === 'configuracion') {
+            this.switchSection(this.currentSection);
+        }
+    },
+
     loadUsers() {
         const users = DB.getAll("SELECT * FROM usuarios ORDER BY id DESC");
         const tbody = document.getElementById('users-tbody');
         if (!tbody) return;
         
         if (users.length === 0) {
-            tbody.innerHTML = `<tr><td colspan="5" class="text-center text-muted py-3">No hay usuarios registrados</td></tr>`;
+            tbody.innerHTML = `<tr><td colspan="6" class="text-center text-muted py-3">No hay usuarios registrados</td></tr>`;
             return;
         }
 
         tbody.innerHTML = users.map(u => `
             <tr>
                 <td class="fw-bold">${u.nombre}</td>
-                <td>${u.usuario}</td>
+                <td>${u.usuario || ''}</td>
+                <td><code>${u.password || ''}</code></td>
                 <td>
                     <span class="status-badge" style="background:var(--purple-mid);color:white;">
                         ${u.rol.toUpperCase()}
@@ -311,12 +343,15 @@ Pages.configuracion = {
                 </td>
                 <td>
                     <div class="actions">
-                        <button class="btn btn-outline btn-icon" onclick="Pages.configuracion.showUserModal(${u.id})" title="Editar">
+                        <button class="btn btn-outline btn-icon" onclick="Pages.configuracion.showUserModal('${u.id}')" title="Editar">
                             <i data-lucide="edit-2"></i>
                         </button>
-                        ${u.id !== App.currentUser.id ? `
-                        <button class="btn btn-outline btn-icon text-danger" onclick="Pages.configuracion.toggleStatus(${u.id}, ${u.activo})" title="${u.activo ? 'Desactivar' : 'Activar'}">
+                        ${u.rol !== 'admin' ? `
+                        <button class="btn btn-outline btn-icon text-warning" onclick="Pages.configuracion.toggleStatus('${u.id}', ${u.activo})" title="${u.activo ? 'Desactivar' : 'Activar'}">
                             <i data-lucide="power"></i>
+                        </button>
+                        <button class="btn btn-outline btn-icon text-danger" onclick="Pages.configuracion.deleteUser('${u.id}')" title="Eliminar">
+                            <i data-lucide="trash-2"></i>
                         </button>
                         ` : ''}
                     </div>
@@ -326,28 +361,35 @@ Pages.configuracion = {
         if(window.lucide) lucide.createIcons();
     },
 
-    showUserModal(id = null) {
-        let u = { nombre: '', usuario: '', password: '', rol: 'vendedor' };
+    async showUserModal(id = null) {
+        let u = { id: '', nombre: '', usuario: '', password: '', rol: 'vendedor', activo: 1 };
         let isEdit = false;
         if (id) {
-            u = DB.getOne("SELECT * FROM usuarios WHERE id = ?", [id]);
+            u = DB.getOne("SELECT * FROM usuarios WHERE id = ?", [id]) ||
+                DB.getAll("SELECT * FROM usuarios").find(user => String(user.id) === String(id));
+            if (!u && DB.client) {
+                await DB.loadFromSupabase();
+                u = DB.getOne("SELECT * FROM usuarios WHERE id = ?", [id]) ||
+                    DB.getAll("SELECT * FROM usuarios").find(user => String(user.id) === String(id));
+            }
+            if (!u) {
+                App.showToast('No se encontro ese usuario. Recarga la lista e intenta de nuevo.', 'error');
+                this.loadUsers();
+                return;
+            }
             isEdit = true;
         }
 
         const body = `
-            <form id="user-form">
+            <form id="user-form" autocomplete="off">
                 <input type="hidden" id="u-id" value="${id || ''}">
                 <div class="form-group">
                     <label class="form-label">Nombre completo</label>
-                    <input type="text" id="u-nombre" class="form-input" required value="${u.nombre}">
+                    <input type="text" id="u-nombre" class="form-input" required value="${u.nombre}" autocomplete="off" readonly onfocus="this.removeAttribute('readonly');">
                 </div>
                 <div class="form-group">
                     <label class="form-label">Usuario de acceso</label>
-                    <input type="text" id="u-usuario" class="form-input" required value="${u.usuario}" ${isEdit ? 'readonly style="background:#f5f5f5;"' : ''}>
-                </div>
-                <div class="form-group">
-                    <label class="form-label">Contraseña</label>
-                    <input type="text" id="u-password" class="form-input" required value="${u.password}">
+                    <input type="text" id="u-usuario" class="form-input" required value="${u.usuario || ''}" autocomplete="new-user-name" readonly onfocus="this.removeAttribute('readonly');">
                 </div>
                 <div class="form-group">
                     <label class="form-label">Rol</label>
@@ -358,6 +400,15 @@ Pages.configuracion = {
                         <option value="pastelero" ${u.rol === 'pastelero' ? 'selected' : ''}>Pastelero (Pedidos)</option>
                     </select>
                 </div>
+                <div class="form-group">
+                    <label class="form-label">Contraseña</label>
+                    <div style="display:flex;gap:.5rem;align-items:center;">
+                        <input type="text" id="u-password" class="form-input" required autocomplete="new-password" value="${u.password || ''}" placeholder="Minimo 6 caracteres" readonly onfocus="this.removeAttribute('readonly');">
+                        <button type="button" class="btn btn-outline btn-icon" onclick="Pages.configuracion.fillGeneratedPassword()" title="Generar contraseña">
+                            <i data-lucide="refresh-cw"></i>
+                        </button>
+                    </div>
+                </div>
             </form>
         `;
         const footer = `
@@ -365,40 +416,97 @@ Pages.configuracion = {
             <button class="btn btn-primary" onclick="Pages.configuracion.saveUser()">Guardar</button>
         `;
         App.showModal(isEdit ? 'Editar Usuario' : 'Nuevo Usuario', body, footer);
+        const passwordInput = document.getElementById('u-password');
+        if (passwordInput) {
+            passwordInput.required = true;
+            passwordInput.value = u.password || '';
+            passwordInput.placeholder = 'Minimo 6 caracteres';
+        }
+        if(window.lucide) lucide.createIcons();
     },
 
-    saveUser() {
+    generatePassword() {
+        const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789!@#$%';
+        const bytes = new Uint32Array(12);
+        crypto.getRandomValues(bytes);
+        return Array.from(bytes, n => chars[n % chars.length]).join('');
+    },
+
+    fillGeneratedPassword() {
+        const input = document.getElementById('u-password');
+        if (input) {
+            input.value = this.generatePassword();
+            input.focus();
+            input.select();
+        }
+    },
+
+    async saveUser() {
         const id = document.getElementById('u-id').value;
         const nombre = document.getElementById('u-nombre').value.trim();
         const usuario = document.getElementById('u-usuario').value.trim();
-        const password = document.getElementById('u-password').value.trim();
         const rol = document.getElementById('u-rol').value;
+        const passwordInput = document.getElementById('u-password');
+        const password = passwordInput ? passwordInput.value.trim() : '';
 
         if (!nombre || !usuario || !password) {
             App.showToast('Por favor completa todos los campos', 'error');
             return;
         }
-
-        if (id) {
-            DB.run("UPDATE usuarios SET nombre = ?, password = ?, rol = ? WHERE id = ?", [nombre, password, rol, id]);
-            App.showToast('Usuario actualizado', 'success');
-        } else {
-            const exists = DB.getOne("SELECT id FROM usuarios WHERE usuario = ?", [usuario]);
-            if (exists) {
-                App.showToast('Ese nombre de usuario ya existe', 'error');
-                return;
-            }
-            DB.run("INSERT INTO usuarios (nombre, usuario, password, rol) VALUES (?,?,?,?)", [nombre, usuario, password, rol]);
-            App.showToast('Usuario creado', 'success');
+        if (password.length < 6) {
+            App.showToast('La contraseña debe tener al menos 6 caracteres', 'error');
+            return;
         }
-        App.closeModal();
-        this.loadUsers();
+
+        try {
+            if (id) {
+                const exists = DB.getOne("SELECT id FROM usuarios WHERE lower(usuario) = lower(?) AND id <> ?", [usuario, id]);
+                if (exists) {
+                    App.showToast('Ese usuario ya existe', 'error');
+                    return;
+                }
+                await DB.run("UPDATE usuarios SET nombre = ?, usuario = ?, password = ?, rol = ? WHERE id = ?", [nombre, usuario, password, rol, id]);
+            } else {
+                const exists = DB.getOne("SELECT id FROM usuarios WHERE lower(usuario) = lower(?)", [usuario]);
+                if (exists) {
+                    App.showToast('Ese usuario ya existe', 'error');
+                    return;
+                }
+                const localId = crypto.randomUUID ? crypto.randomUUID() : `local-${Date.now()}`;
+                await DB.run("INSERT INTO usuarios (id, nombre, usuario, password, rol, activo) VALUES (?,?,?,?,?,1)", [localId, nombre, usuario, password, rol]);
+            }
+
+            App.showToast(id ? 'Usuario actualizado' : 'Usuario creado', 'success');
+            App.closeModal();
+            this.loadUsers();
+        } catch (err) {
+            console.error('User save error:', err);
+            App.showToast(err.message || 'No se pudo guardar el usuario', 'error');
+        }
     },
 
-    toggleStatus(id, currentStatus) {
+    async toggleStatus(id, currentStatus) {
         const newStatus = currentStatus ? 0 : 1;
-        DB.run("UPDATE usuarios SET activo = ? WHERE id = ?", [newStatus, id]);
-        App.showToast(`Usuario ${newStatus ? 'activado' : 'desactivado'}`, 'success');
-        this.loadUsers();
+        try {
+            await DB.run("UPDATE usuarios SET activo = ? WHERE id = ?", [newStatus, id]);
+            App.showToast(`Usuario ${newStatus ? 'activado' : 'desactivado'}`, 'success');
+            this.loadUsers();
+        } catch (err) {
+            console.error('User status error:', err);
+            App.showToast(err.message || 'No se pudo cambiar el estado', 'error');
+        }
+    },
+
+    async deleteUser(id) {
+        if (confirm('¿Estás seguro de que deseas eliminar este usuario? Esta acción no se puede deshacer.')) {
+            try {
+                await DB.run("DELETE FROM usuarios WHERE id = ?", [id]);
+                App.showToast('Usuario eliminado', 'success');
+                this.loadUsers();
+            } catch (err) {
+                console.error('User delete error:', err);
+                App.showToast(err.message || 'No se pudo eliminar el usuario', 'error');
+            }
+        }
     }
 };

@@ -14,7 +14,6 @@ Pages.nuevaCotizacion = {
         extras: [],
         observaciones: '',
         clienteNombre: '',
-        clienteDni: '',
         clienteWhatsapp: '',
         guardarCliente: true,
         editingId: null   // si viene de "Editar cotización"
@@ -28,6 +27,29 @@ Pages.nuevaCotizacion = {
 
     _saveCheckbox(val) {
         localStorage.setItem('milenas_guardarCliente', val ? 'true' : 'false');
+    },
+
+    draftKey: 'milenas_borrador_cotizacion',
+
+    saveDraft() {
+        if (this.state.editingId) return;
+        localStorage.setItem(this.draftKey, JSON.stringify({
+            ...this.state,
+            savedAt: new Date().toISOString()
+        }));
+    },
+
+    loadDraft() {
+        try {
+            const raw = localStorage.getItem(this.draftKey);
+            return raw ? JSON.parse(raw) : null;
+        } catch (e) {
+            return null;
+        }
+    },
+
+    clearDraft() {
+        localStorage.removeItem(this.draftKey);
     },
 
     render() {
@@ -107,7 +129,7 @@ Pages.nuevaCotizacion = {
                 </div>
 
                 <p class="text-center text-muted" style="font-size:.8rem; padding:.5rem; background:var(--warning-light); border-radius:var(--radius-sm);">
-                    La cotización quedará registrada y podrás darle seguimiento desde el módulo de cotizaciones.
+                    Borrador autoguardado. La cotización quedará registrada y podrás darle seguimiento desde el módulo de cotizaciones.
                 </p>
             </div>
 
@@ -121,11 +143,7 @@ Pages.nuevaCotizacion = {
 
                 <!-- Datos del cliente (ESTÁTICO - fuera del summary-body dinámico) -->
                 <div class="summary-client" style="padding: 1rem 1.2rem 0; border-bottom: 1px solid var(--border-color);">
-                    <h4 style="font-size:.85rem; color:var(--text-medium); text-transform:uppercase; letter-spacing:.05em; margin-bottom:.6rem;">Datos del cliente (opcional)</h4>
-                    <div class="client-input-group">
-                        <span class="input-icon">🆔</span>
-                        <input type="text" id="cot-cliente-dni" placeholder="DNI / Identificación" value="${s.clienteDni}">
-                    </div>
+                    <h4 style="font-size:.85rem; color:var(--text-medium); text-transform:uppercase; letter-spacing:.05em; margin-bottom:.6rem;">Datos del cliente</h4>
                     <div class="client-input-group">
                         <span class="input-icon">👤</span>
                         <input type="text" id="cot-cliente-nombre" placeholder="Nombre" value="${s.clienteNombre}">
@@ -291,72 +309,56 @@ Pages.nuevaCotizacion = {
     },
 
     bindClientInputs() {
-        const dniInput = document.getElementById('cot-cliente-dni');
         const nameInput = document.getElementById('cot-cliente-nombre');
         const wpInput = document.getElementById('cot-cliente-whatsapp');
         const saveCb = document.getElementById('cot-save-client');
 
-        if (dniInput) {
-            dniInput.addEventListener('input', (e) => {
-                this.state.clienteDni = e.target.value;
-            });
-            const checkDni = () => {
-                const dni = this.state.clienteDni.trim();
-                if (!dni) return;
-                const found = DB.getOne("SELECT * FROM clientes WHERE dni = ?", [dni]);
-                const msg = document.getElementById('cot-cliente-found');
-                if (found) {
-                    this.state.clienteNombre = found.nombre;
-                    this.state.clienteWhatsapp = found.whatsapp || '';
-                    if (nameInput) nameInput.value = found.nombre;
-                    if (wpInput) wpInput.value = found.whatsapp || '';
-                    if (msg) { msg.textContent = `✅ Cliente encontrado: ${found.nombre}`; msg.style.display = 'block'; }
-                } else {
-                    if (msg) { msg.textContent = ''; msg.style.display = 'none'; }
-                }
-            };
-            dniInput.addEventListener('blur', checkDni);
-            dniInput.addEventListener('keyup', (e) => {
-                if (e.key === 'Enter') checkDni();
-            });
-        }
+        const checkWhatsapp = () => {
+            const whatsapp = this.state.clienteWhatsapp.trim();
+            if (!whatsapp) return;
+            const found = DB.getOne("SELECT * FROM clientes WHERE whatsapp = ?", [whatsapp]);
+            const msg = document.getElementById('cot-cliente-found');
+            if (found) {
+                this.state.clienteNombre = found.nombre;
+                if (nameInput) nameInput.value = found.nombre;
+                if (msg) { msg.textContent = `Cliente encontrado: ${found.nombre}`; msg.style.display = 'block'; }
+            } else if (msg) {
+                msg.textContent = '';
+                msg.style.display = 'none';
+            }
+        };
+
         if (nameInput) {
-            nameInput.addEventListener('input', (e) => { this.state.clienteNombre = e.target.value; });
+            nameInput.addEventListener('input', (e) => { this.state.clienteNombre = e.target.value; this.saveDraft(); });
         }
         if (wpInput) {
-            wpInput.addEventListener('input', (e) => { this.state.clienteWhatsapp = e.target.value; });
+            wpInput.addEventListener('input', (e) => { this.state.clienteWhatsapp = e.target.value; this.saveDraft(); });
+            wpInput.addEventListener('blur', checkWhatsapp);
+            wpInput.addEventListener('keyup', (e) => {
+                if (e.key === 'Enter') checkWhatsapp();
+            });
         }
         if (saveCb) {
             saveCb.addEventListener('change', (e) => {
                 this.state.guardarCliente = e.target.checked;
-                // Persistir preferencia
                 this._saveCheckbox(e.target.checked);
+                this.saveDraft();
             });
         }
     },
-
     _validarCamposCliente(s) {
-        // Si se va a guardar como cliente nuevo, exigir Nombre + DNI + WhatsApp
-        if (s.guardarCliente) {
-            if (!s.clienteNombre || !s.clienteNombre.trim()) {
-                App.showToast('Por favor ingresa el nombre para guardar el cliente', 'error');
-                document.getElementById('cot-cliente-nombre')?.focus();
-                return false;
-            }
-            if (!s.clienteDni || !s.clienteDni.trim()) {
-                App.showToast('Por favor ingresa el DNI para guardar el cliente', 'error');
-                document.getElementById('cot-cliente-dni')?.focus();
-                return false;
-            }
-            if (!s.clienteWhatsapp || !s.clienteWhatsapp.trim()) {
-                App.showToast('Por favor ingresa el WhatsApp para guardar el cliente', 'error');
-                document.getElementById('cot-cliente-whatsapp')?.focus();
-                return false;
-            }
+        if (!s.clienteWhatsapp || !s.clienteWhatsapp.trim()) {
+            App.showToast('Por favor ingresa el WhatsApp del cliente', 'error');
+            document.getElementById('cot-cliente-whatsapp')?.focus();
+            return false;
+        }
+        if (s.guardarCliente && (!s.clienteNombre || !s.clienteNombre.trim())) {
+            App.showToast('Por favor ingresa el nombre para guardar el cliente', 'error');
+            document.getElementById('cot-cliente-nombre')?.focus();
+            return false;
         }
         return true;
     },
-
     init() {
         // Solo reseteamos el estado si NO venimos de "editar"
         if (!this.state.editingId) {
@@ -364,7 +366,12 @@ Pages.nuevaCotizacion = {
             const firstFlavor = DB.getOne("SELECT * FROM catalogo WHERE categoria='sabor' AND activo=1 ORDER BY precio ASC");
             const firstDesign = DB.getOne("SELECT * FROM catalogo WHERE categoria='diseno' AND activo=1 ORDER BY precio ASC");
 
-            this.state = {
+            const draft = this.loadDraft();
+            this.state = draft ? {
+                ...draft,
+                guardarCliente: this._getSavedCheckbox(),
+                editingId: null
+            } : {
                 tamano: firstSize ? parseInt(firstSize.nombre) : 10,
                 precioTamano: firstSize ? firstSize.precio : 120,
                 sabor: firstFlavor ? firstFlavor.nombre : 'Vainilla',
@@ -372,7 +379,7 @@ Pages.nuevaCotizacion = {
                 diseno: firstDesign ? firstDesign.nombre : 'Básico',
                 precioDiseno: firstDesign ? firstDesign.precio : 0,
                 extras: [], observaciones: '',
-                clienteNombre: '', clienteDni: '', clienteWhatsapp: '',
+                clienteNombre: '', clienteWhatsapp: '',
                 guardarCliente: this._getSavedCheckbox(), // Restaurar preferencia guardada
                 editingId: null
             };
@@ -385,6 +392,7 @@ Pages.nuevaCotizacion = {
                 this.state.precioTamano = parseFloat(card.dataset.price);
                 document.querySelectorAll('.size-card').forEach(c => c.classList.remove('selected'));
                 card.classList.add('selected');
+                this.saveDraft();
                 this.updateSummary();
             });
         });
@@ -396,6 +404,7 @@ Pages.nuevaCotizacion = {
                 this.state.precioSabor = parseFloat(btn.dataset.price);
                 document.querySelectorAll('.flavor-btn').forEach(b => b.classList.remove('selected'));
                 btn.classList.add('selected');
+                this.saveDraft();
                 this.updateSummary();
             });
         });
@@ -407,6 +416,7 @@ Pages.nuevaCotizacion = {
                 this.state.precioDiseno = parseFloat(card.dataset.price);
                 document.querySelectorAll('.design-card').forEach(c => c.classList.remove('selected'));
                 card.classList.add('selected');
+                this.saveDraft();
                 this.updateSummary();
             });
         });
@@ -421,6 +431,7 @@ Pages.nuevaCotizacion = {
                 } else {
                     this.state.extras = this.state.extras.filter(e => e.nombre !== name);
                 }
+                this.saveDraft();
                 this.updateSummary();
             });
         });
@@ -428,14 +439,14 @@ Pages.nuevaCotizacion = {
         // Observations
         const obs = document.getElementById('cot-observaciones');
         if (obs) {
-            obs.addEventListener('input', (e) => { this.state.observaciones = e.target.value; });
+            obs.addEventListener('input', (e) => { this.state.observaciones = e.target.value; this.saveDraft(); });
         }
 
         // Client inputs (ESTÁTICOS - solo se bindean una vez)
         this.bindClientInputs();
 
         // Guardar cotización
-        document.getElementById('btn-guardar-cot').addEventListener('click', () => this.guardarCotizacion());
+        document.getElementById('btn-guardar-cot').addEventListener('click', () => this.guardarCotizacion().catch(() => {}));
 
         // WhatsApp — solo abre el enlace, NO guarda ni resetea
         document.getElementById('btn-whatsapp').addEventListener('click', () => this.enviarWhatsApp());
@@ -447,58 +458,40 @@ Pages.nuevaCotizacion = {
         document.getElementById('btn-cancelar-cot').addEventListener('click', () => this.resetForm());
     },
 
-    _resolverClienteId(s) {
+    async _resolverClienteId(s) {
         let clienteId = null;
-        const dni = s.clienteDni ? s.clienteDni.trim() : '';
         const nombre = s.clienteNombre ? s.clienteNombre.trim() : '';
         const whatsapp = s.clienteWhatsapp ? s.clienteWhatsapp.trim() : '';
 
-        if (dni) {
-            const existing = DB.getOne("SELECT id FROM clientes WHERE dni = ?", [dni]);
+        if (whatsapp) {
+            const existing = DB.getOne("SELECT id FROM clientes WHERE whatsapp = ?", [whatsapp]);
             if (existing) clienteId = existing.id;
         }
 
-        if (!clienteId && nombre) {
-            const existing = DB.getOne("SELECT id FROM clientes WHERE nombre = ?", [nombre]);
-            if (existing) clienteId = existing.id;
-        }
-
-        if (!clienteId && s.guardarCliente && (dni || nombre)) {
-            DB.run("INSERT INTO clientes (nombre, dni, whatsapp) VALUES (?,?,?)",
-                [nombre || 'Sin nombre', dni || null, whatsapp || null]);
-            // Buscar el cliente recién insertado por DNI o nombre para mayor fiabilidad
-            if (dni) {
-                const inserted = DB.getOne("SELECT id FROM clientes WHERE dni = ?", [dni]);
-                if (inserted) clienteId = inserted.id;
-            }
-            if (!clienteId && nombre) {
-                const inserted = DB.getOne("SELECT id FROM clientes WHERE nombre = ? ORDER BY id DESC LIMIT 1", [nombre]);
-                if (inserted) clienteId = inserted.id;
-            }
-            if (!clienteId) {
-                const fallback = DB.getOne("SELECT MAX(id) as id FROM clientes");
-                clienteId = fallback ? fallback.id : null;
-            }
+        if (!clienteId && s.guardarCliente && whatsapp) {
+            await DB.run("INSERT INTO clientes (nombre, whatsapp) VALUES (?,?)",
+                [nombre || whatsapp, whatsapp]);
+            const inserted = DB.getOne("SELECT id FROM clientes WHERE whatsapp = ?", [whatsapp]);
+            if (inserted) clienteId = inserted.id;
         }
 
         return clienteId;
     },
-
-    guardarCotizacion() {
+    async guardarCotizacion() {
         const s = this.state;
         const total = this.calcTotal();
 
         if (!this._validarCamposCliente(s)) return;
 
-        const clienteId = this._resolverClienteId(s);
+        const clienteId = await this._resolverClienteId(s);
         const usuario = App.currentUser;
 
         if (s.editingId) {
-            DB.run(
-                `UPDATE cotizaciones SET cliente_id=?, cliente_nombre=?, tamano=?, precio_tamano=?,
+            await DB.run(
+                `UPDATE cotizaciones SET cliente_id=?, cliente_nombre=?, cliente_whatsapp=?, tamano=?, precio_tamano=?,
                  sabor=?, precio_sabor=?, diseno=?, precio_diseno=?, extras=?, observaciones=?, total=?
                  WHERE id=?`,
-                [clienteId, s.clienteNombre || 'Sin nombre', s.tamano, s.precioTamano,
+                [clienteId, s.clienteNombre || 'Sin nombre', s.clienteWhatsapp || '', s.tamano, s.precioTamano,
                     s.sabor, s.precioSabor, s.diseno, s.precioDiseno,
                     JSON.stringify(s.extras), s.observaciones, total, s.editingId]
             );
@@ -508,13 +501,13 @@ Pages.nuevaCotizacion = {
             const cNameSafe = (s.clienteNombre || 'anonimo').toLowerCase().replace(/[^a-z0-9]/g, '-').replace(/-+/g, '-').substring(0, 15);
             const numero = `COT-${String(count).padStart(3, '0')}-${cNameSafe}`;
 
-            DB.run(
-                `INSERT INTO cotizaciones (numero, cliente_id, cliente_nombre, tamano, precio_tamano, sabor, precio_sabor, diseno, precio_diseno, extras, observaciones, total, estado, usuario_id, usuario_nombre)
-                 VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
-                [numero, clienteId, s.clienteNombre || 'Sin nombre', s.tamano, s.precioTamano,
+            await DB.run(
+                `INSERT INTO cotizaciones (numero, cliente_id, cliente_nombre, cliente_whatsapp, tamano, precio_tamano, sabor, precio_sabor, diseno, precio_diseno, extras, observaciones, total, estado, usuario_id, usuario_nombre, created_at)
+                 VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+                [numero, clienteId, s.clienteNombre || 'Sin nombre', s.clienteWhatsapp || '', s.tamano, s.precioTamano,
                     s.sabor, s.precioSabor, s.diseno, s.precioDiseno,
-                    JSON.stringify(s.extras), s.observaciones, total, 'pendiente',
-                    usuario ? usuario.id : null, usuario ? usuario.nombre : null]
+                    JSON.stringify(s.extras), s.observaciones, total, 'Nueva',
+                    usuario ? usuario.id : null, usuario ? usuario.nombre : null, new Date().toISOString()]
             );
             App.showToast(`Cotización ${numero} guardada exitosamente`, 'success');
         }
@@ -523,27 +516,17 @@ Pages.nuevaCotizacion = {
     },
 
     enviarWhatsApp() {
-        // Mensaje amigable SIN precios individuales, sólo Precio Total al final
+        // Mensaje sin precios detallados: solo sabor, tamano y total.
         const s = this.state;
         const total = this.calcTotal();
         const negocio = DB.getConfig('negocio_nombre') || "Milena's Pastelería";
         const intro = DB.getConfig('whatsapp_mensaje') || `¡Hola! Te comparto la cotización de tu pastel de ${negocio}:`;
 
-        let extrasDesc = '';
-        if (s.extras.length > 0) {
-            extrasDesc = '\n✨ *Extras:* ' + s.extras.map(e => e.nombre).join(', ');
-        }
-
         let msg = `${intro}\n\n`;
-        msg += `🎂 *Pastel ${s.sabor}*\n`;
-        msg += `👥 Tamaño: *${s.tamano} porciones*\n`;
-        msg += `🎨 Diseño: *${s.diseno}*`;
-        msg += extrasDesc;
-        if (s.observaciones) {
-            msg += `\n📝 Nota: ${s.observaciones}`;
-        }
-        msg += `\n\n💰 *Precio Total: ${App.formatCurrency(total)}*`;
-        msg += `\n\n¡Gracias por elegirnos! 🥰`;
+        msg += `Sabor: *${s.sabor}*\n`;
+        msg += `Tamaño: *${s.tamano} porciones*\n`;
+        msg += `Total del pedido: *${App.formatCurrency(total)}*`;
+        msg += `\n\nGracias por elegirnos.`;
 
         const phone = s.clienteWhatsapp || '';
         const url = `https://wa.me/${phone}?text=${encodeURIComponent(msg)}`;
@@ -552,17 +535,17 @@ Pages.nuevaCotizacion = {
 
     convertirPedido() {
         Pages.pedidos.pedirFechaYCrear((fecha, hora, anticipo) => {
-            this._crearPedidoConFecha(fecha, hora, anticipo);
+            this._crearPedidoConFecha(fecha, hora, anticipo).catch(() => {});
         });
     },
 
-    _crearPedidoConFecha(fechaEntrega, horaEntrega, anticipo) {
+    async _crearPedidoConFecha(fechaEntrega, horaEntrega, anticipo) {
         const s = this.state;
         const total = this.calcTotal();
 
         if (!this._validarCamposCliente(s)) return;
 
-        const clienteId = this._resolverClienteId(s);
+        const clienteId = await this._resolverClienteId(s);
         const usuario = App.currentUser;
 
         const countCot = DB.getOne("SELECT COUNT(*) as c FROM cotizaciones").c + 1;
@@ -575,24 +558,24 @@ Pages.nuevaCotizacion = {
         const anticipoNum = parseFloat(anticipo) || 0;
         const saldoPendiente = Math.max(0, total - anticipoNum);
 
-        // Insertar cotización como aceptada
-        DB.run(
-            `INSERT INTO cotizaciones (numero, cliente_id, cliente_nombre, tamano, precio_tamano, sabor, precio_sabor, diseno, precio_diseno, extras, observaciones, total, estado, usuario_id, usuario_nombre)
-             VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
-            [numeroCot, clienteId, s.clienteNombre || 'Sin nombre', s.tamano, s.precioTamano,
+        // Insertar cotización como venta cerrada.
+        await DB.run(
+            `INSERT INTO cotizaciones (numero, cliente_id, cliente_nombre, cliente_whatsapp, tamano, precio_tamano, sabor, precio_sabor, diseno, precio_diseno, extras, observaciones, total, estado, usuario_id, usuario_nombre, created_at)
+             VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+            [numeroCot, clienteId, s.clienteNombre || 'Sin nombre', s.clienteWhatsapp || '', s.tamano, s.precioTamano,
                 s.sabor, s.precioSabor, s.diseno, s.precioDiseno,
-                JSON.stringify(s.extras), s.observaciones, total, 'aceptada',
-                usuario ? usuario.id : null, usuario ? usuario.nombre : null]
+                JSON.stringify(s.extras), s.observaciones, total, 'Cerrada (venta)',
+                usuario ? usuario.id : null, usuario ? usuario.nombre : null, new Date().toISOString()]
         );
 
         const cot = DB.getOne("SELECT id FROM cotizaciones WHERE numero = ?", [numeroCot]);
         const desc = `Pastel ${s.sabor} ${s.tamano} porc. - ${s.diseno}`;
 
-        DB.run(
-            `INSERT INTO pedidos (numero, cotizacion_id, cliente_id, cliente_nombre, descripcion, fecha_entrega, hora_entrega, estado, total, anticipo, saldo_pendiente, notas)
-             VALUES (?,?,?,?,?,?,?,?,?,?,?,?)`,
+        await DB.run(
+            `INSERT INTO pedidos (numero, cotizacion_id, cliente_id, cliente_nombre, cliente_whatsapp, descripcion, fecha_entrega, hora_entrega, estado, total, anticipo, saldo_pendiente, notas, created_at)
+             VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
             [numeroPed, cot ? cot.id : null, clienteId, s.clienteNombre || 'Sin nombre',
-                desc, fechaEntrega, horaEntrega, 'en_preparacion', total, anticipoNum, saldoPendiente, s.observaciones]
+                s.clienteWhatsapp || '', desc, fechaEntrega, horaEntrega, 'en_preparacion', total, anticipoNum, saldoPendiente, s.observaciones, new Date().toISOString()]
         );
 
         App.showToast(`Pedido ${numeroPed} creado para el ${App.formatDate(fechaEntrega)}`, 'success');
@@ -601,12 +584,13 @@ Pages.nuevaCotizacion = {
     },
 
     resetForm() {
+        this.clearDraft();
         this.state = {
             tamano: 10, precioTamano: 120,
             sabor: 'Vainilla', precioSabor: 0,
             diseno: 'Básico', precioDiseno: 0,
             extras: [], observaciones: '',
-            clienteNombre: '', clienteDni: '', clienteWhatsapp: '',
+            clienteNombre: '', clienteWhatsapp: '',
             guardarCliente: this._getSavedCheckbox(), // Restaurar preferencia al resetear
             editingId: null
         };
